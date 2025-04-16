@@ -190,7 +190,7 @@ void Position::init() {
   // Prepare the cuckoo tables
   std::memset(cuckoo, 0, sizeof(cuckoo));
   std::memset(cuckooMove, 0, sizeof(cuckooMove));
-  int count = 0;
+  [[maybe_unused]] int count = 0;
   for (Color c : {WHITE, BLACK})
       for (PieceSet ps = CHESS_PIECES & ~piece_set(PAWN); ps;)
       {
@@ -367,10 +367,10 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           token = char(toupper(token));
 
           if (castling_enabled() && token == 'K')
-              for (rsq = make_square(var->castlingRookKingsideFile, castling_rank(c)); !(castling_rook_pieces(c) & type_of(piece_on(rsq))) || color_of(piece_on(rsq)) != c; --rsq) {}
+              for (rsq = make_square(var->castlingRookKingsideFile, castling_rank(c)); (!(castling_rook_pieces(c) & type_of(piece_on(rsq))) || color_of(piece_on(rsq)) != c) && file_of(rsq) > FILE_A; --rsq) {}
 
           else if (castling_enabled() && token == 'Q')
-              for (rsq = make_square(var->castlingRookQueensideFile, castling_rank(c)); !(castling_rook_pieces(c) & type_of(piece_on(rsq))) || color_of(piece_on(rsq)) != c; ++rsq) {}
+              for (rsq = make_square(var->castlingRookQueensideFile, castling_rank(c)); (!(castling_rook_pieces(c) & type_of(piece_on(rsq))) || color_of(piece_on(rsq)) != c) && file_of(rsq) < max_file(); ++rsq) {}
 
           else if (token >= 'A' && token <= 'A' + max_file())
               rsq = make_square(File(token - 'A'), castling_rank(c));
@@ -387,13 +387,18 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               st->castlingKingSquare[c] =  isChess960 && piece_on(rsq) == make_piece(c, castling_king_piece(c)) ? rsq
                                          : castlingKings && (!more_than_one(castlingKings) || isChess960) ? lsb(castlingKings)
                                          : make_square(castling_king_file(), castling_rank(c));
+              // Skip invalid castling rights
+              if (!(castlingKings & st->castlingKingSquare[c]))
+                  st->castlingKingSquare[c] = SQ_NONE;
           }
 
           // Set gates (and skip castling rights)
           if (gating())
           {
-              st->gatesBB[c] |= rsq;
-              if (token == 'K' || token == 'Q')
+              // Only add gates for occupied squares
+              if (pieces(c) & rsq)
+                  st->gatesBB[c] |= rsq;
+              if ((token == 'K' || token == 'Q') && st->castlingKingSquare[c] != SQ_NONE)
                   st->gatesBB[c] |= st->castlingKingSquare[c];
               // Do not set castling rights for gates unless there are no pieces in hand,
               // which means that the file is referring to a chess960 castling right.
@@ -401,7 +406,10 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
                   continue;
           }
 
-          if (castling_enabled() && (castling_rook_pieces(c) & type_of(piece_on(rsq))) && color_of(piece_on(rsq)) == c)
+          // Only add castling right if both king and rook are on expected squares
+          if (   castling_enabled()
+              && st->castlingKingSquare[c] != SQ_NONE
+              && (castling_rook_pieces(c) & type_of(piece_on(rsq))) && color_of(piece_on(rsq)) == c)
               set_castling_right(c, rsq);
       }
 
@@ -443,14 +451,14 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               // 2)
               // a) side to move have a pawn threatening epSquare
               // b) there is an enemy pawn one or two (for triple steps) squares in front of epSquare
-              // c) there is no piece on epSquare or behind epSquare
+              // c) there is no (non-wall) piece on epSquare or behind epSquare
               if (   (var->enPassantRegion & epSquare)
                   && (   !var->fastAttacks
                       || (var->enPassantTypes[sideToMove] & ~piece_set(PAWN))
                       || (   pawn_attacks_bb(~sideToMove, epSquare) & pieces(sideToMove, PAWN)
                           && (   (pieces(~sideToMove, PAWN) & (epSquare + pawn_push(~sideToMove)))
                               || (pieces(~sideToMove, PAWN) & (epSquare + 2 * pawn_push(~sideToMove))))
-                          && !(pieces() & (epSquare | (epSquare + pawn_push(sideToMove)))))))
+                          && !((pieces(WHITE) | pieces(BLACK)) & (epSquare | (epSquare + pawn_push(sideToMove)))))))
                   st->epSquares |= epSquare;
           }
   }
@@ -686,7 +694,7 @@ Position& Position::set(const string& code, Color c, StateInfo* si) {
 /// Position::fen() returns a FEN representation of the position. In case of
 /// Chess960 the Shredder-FEN notation is used. This is mainly a debugging function.
 
-string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string holdings) const {
+string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string holdings, Bitboard fogArea) const {
 
   int emptyCnt;
   std::ostringstream ss;
@@ -695,7 +703,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   {
       for (File f = FILE_A; f <= max_file(); ++f)
       {
-          for (emptyCnt = 0; f <= max_file() && !(pieces() & make_square(f, r)); ++f)
+          for (emptyCnt = 0; f <= max_file() && !(pieces() & make_square(f, r)) && !(fogArea & make_square(f, r)); ++f)
               ++emptyCnt;
 
           if (emptyCnt)
@@ -703,7 +711,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
 
           if (f <= max_file())
           {
-              if (empty(make_square(f, r)))
+              if (empty(make_square(f, r)) || fogArea & make_square(f, r))
                   // Wall square
                   ss << "*";
               else if (unpromoted_piece_on(make_square(f, r)))
@@ -2854,7 +2862,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           current |= newBitboard;
       }
   }
-  
+
   if (connect_nxn())
   {
       Bitboard connectors = connectPieces;
