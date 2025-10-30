@@ -1,6 +1,7 @@
 import sys
 
-ENTRY_SIZE = 40
+# The Fairy-SF bin format has 64+8 instead of 32+8 bytes
+ENTRY_SIZE = 72
 NUM_ENTRIES_IN_CHUNK = 1024*1024
 
 def copy(infile, outfile, count, times):
