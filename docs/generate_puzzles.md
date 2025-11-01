@@ -34,6 +34,8 @@ Currently the following options are available:
 
 `mate_ply` - only keep positions with mate in at least this many plies. Filters out mates that are too short. When using `puzzle_depth` it applies to this validation search, otherwise uses the regular search result. Default: 1.
 
+`unique_mate` - either 0 or 1. When enabled (1), uses multipv 2 during puzzle verification and filters out positions where the second best line also has a mate score. This ensures only positions with a single unique mating line are kept as puzzles, improving puzzle quality. Default: 1.
+
 `random_move_min_ply` - the minimal ply at which a random move may be executed instead of a move chosen by search. Default: 1.
 
 `random_move_max_ply` - the maximal ply at which a random move may be executed instead of a move chosen by search. Default: 150.

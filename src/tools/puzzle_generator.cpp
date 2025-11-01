@@ -57,6 +57,7 @@ namespace Stockfish::Tools
             int king_safety_limit = 64000;
             int material_limit = 64000;
             int mate_ply = 1;
+            bool unique_mate = true;
 
             // minimum ply with random move
             // maximum ply with random move
@@ -342,10 +343,21 @@ namespace Stockfish::Tools
                     // If puzzle_depth is set, we will check if the position is a mate or not.
                     else if (params.puzzle_depth > 0)
                     {
-                        auto [search_value2, search_pv2] = Search::search(pos, params.puzzle_depth, 1, 0);
+                        auto [search_value2, search_pv2] = Search::search(pos, params.puzzle_depth, params.unique_mate ? 2 : 1, 0);
                         // Filter non-mate and short mate positions
                         if (search_value2 < VALUE_MATE_IN_MAX_PLY || search_value2 > mate_in(params.mate_ply))
                             keep = false;
+                        // Filter positions where the second line also has a mate score (if unique_mate is enabled)
+                        else if (params.unique_mate)
+                        {
+                            auto& rm = pos.this_thread()->rootMoves;
+                            if (rm.size() >= 2)
+                            {
+                                Value second_value = rm[1].score;
+                                if (second_value >= VALUE_MATE_IN_MAX_PLY)
+                                    keep = false;
+                            }
+                        }
                     }
 
                     // As a fallback if puzzle_depth is not set
@@ -728,6 +740,8 @@ namespace Stockfish::Tools
                 is >> params.material_limit;
             else if (token == "mate_ply")
                 is >> params.mate_ply;
+            else if (token == "unique_mate")
+                is >> params.unique_mate;
             else if (token == "random_move_min_ply")
                 is >> params.random_move_minply;
             else if (token == "random_move_max_ply")
@@ -826,6 +840,7 @@ namespace Stockfish::Tools
             << "  - king_safety_limit      = " << params.king_safety_limit << endl
             << "  - material_limit         = " << params.material_limit << endl
             << "  - mate_ply               = " << params.mate_ply << endl
+            << "  - unique_mate            = " << params.unique_mate << endl
             << "  - num threads (UCI)      = " << params.num_threads << endl
             << "  - random_move_min_ply    = " << params.random_move_minply << endl
             << "  - random_move_max_ply    = " << params.random_move_maxply << endl
