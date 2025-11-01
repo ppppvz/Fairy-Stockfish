@@ -22,7 +22,7 @@ Currently the following options are available:
 
 `max_depth` - maximum depth of evaluation of each position. If not specified then the same as `depth`.
 
-`puzzle_depth` - if set to a value greater than 0, enables mate puzzle filtering. Positions will be searched to this depth to verify they contain a forced mate. Only positions with mates longer than `mate_ply` will be kept. Default: 7.
+`puzzle_depth` - if set to a value greater than 0, enables mate puzzle validation. Positions will be searched to this depth to verify they contain a forced mate. Only positions with mates longer than `mate_ply` will be kept. Default: 7.
 
 `nodes` - the number of nodes to use for evaluation of each position. This number is multiplied by the number of PVs of the current search. This does NOT override the depth options. If specified then whichever of depth or nodes limit is reached first applies. Default: 0 (no node limit).
 
@@ -32,7 +32,7 @@ Currently the following options are available:
 
 `material_limit` - maximum allowed material advantage. Positions with material imbalance exceeding this value are filtered out. Default: 64000 (effectively disabled).
 
-`mate_ply` - when using `puzzle_depth`, only keep positions with mate in at least this many plies. Filters out mates that are too short. Default: 1.
+`mate_ply` - only keep positions with mate in at least this many plies. Filters out mates that are too short. When using `puzzle_depth` it applies to this validation search, otherwise uses the regular search result. Default: 1.
 
 `random_move_min_ply` - the minimal ply at which a random move may be executed instead of a move chosen by search. Default: 1.
 
