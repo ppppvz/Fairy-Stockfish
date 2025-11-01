@@ -62,6 +62,6 @@ Currently the following options are available:
 
 `adjudicate_draws_by_insufficient_mating_material` - either 0 or 1. If 1 then positions with insufficient material will be adjudicated as draws. Default: 1.
 
-`data_format` - format of the puzzle data to use. Only `bin` is supported. Default: `bin`.
+`data_format` - format of the puzzle data to use. Supported formats are `bin` (binary PackedSfenValue format) and `epd` (Extended Position Description, FEN strings). Default: `epd`.
 
 `seed` - seed for the PRNG. Can be either a number or a string. If it's a string then its hash will be used. If not specified then the current time will be used.
