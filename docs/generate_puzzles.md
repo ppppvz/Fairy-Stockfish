@@ -30,11 +30,9 @@ Currently the following options are available:
 
 `output_file_name` - the name of the file to output to. If the extension is not present or doesn't match the selected data format the right extension will be appended. Default: puzzles
 
-`eval_limit` - evaluations with higher absolute value than this will not be written and will terminate a self-play game. Should not exceed 10000 which is VALUE_KNOWN_WIN, but is only hardcapped at mate in 2 (~30000). Default: VALUE_MATE (effectively disabled).
-
 `material_limit` - maximum allowed material advantage. Positions with material imbalance exceeding this value are filtered out. Default: 64000 (effectively disabled).
 
-`mate_ply` - when using `puzzle_depth`, only keep positions with mate in at least this many plies. Filters out mates that are too short. Default: 0.
+`mate_ply` - when using `puzzle_depth`, only keep positions with mate in at least this many plies. Filters out mates that are too short. Default: 1.
 
 `random_move_min_ply` - the minimal ply at which a random move may be executed instead of a move chosen by search. Default: 1.
 

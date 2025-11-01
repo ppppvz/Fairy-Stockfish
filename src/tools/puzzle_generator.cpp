@@ -54,11 +54,9 @@ namespace Stockfish::Tools
             uint64_t nodes = 0;
 
             // Upper limit of evaluation value of generated situation
-            int eval_limit = VALUE_MATE;
-            int eval_diff_limit = 64000;
             int king_safety_limit = 64000;
             int material_limit = 64000;
-            int mate_ply = 0;
+            int mate_ply = 1;
 
             // minimum ply with random move
             // maximum ply with random move
@@ -103,9 +101,6 @@ namespace Stockfish::Tools
             void enforce_constraints()
             {
                 search_depth_max = std::max(search_depth_min, search_depth_max);
-
-                // Limit the maximum to a one-stop score. (Otherwise you might not end the loop)
-                eval_limit = std::min(eval_limit, (int)mate_in(2));
 
                 save_every = std::max(save_every, report_stats_every);
 
@@ -284,8 +279,6 @@ namespace Stockfish::Tools
                 pos.set(variants.find(Options["UCI_Variant"])->second, variants.find(Options["UCI_Variant"])->second->startFen, false, &si, &th);
             }
 
-            int resign_counter = 0;
-            bool should_resign = prng.rand(10) > 1;
             // Vector for holding the sfens in the current simulated game.
             PSVector packed_sfens;
             packed_sfens.reserve(params.write_maxply + MAX_PLY);
@@ -324,26 +317,11 @@ namespace Stockfish::Tools
                     break;
                 }
 
-                // Always adjudicate by eval limit.
-                // Also because of this we don't have to check for TB/MATE scores
-                if (abs(search_value) >= params.eval_limit)
-                {
-                    resign_counter++;
-                    if ((should_resign && resign_counter >= 4) || abs(search_value) >= VALUE_KNOWN_WIN) {
-                        flush_psv((search_value >= params.eval_limit) ? 1 : -1);
-                        break;
-                    }
-                }
-                else
-                {
-                    resign_counter = 0;
-                }
-
                 // In case there is no PV and the game was not ended here
-                // there is nothing we can do, we can't continue the game,
-                // we don't know the result, so discard this game.
+                // we can't continue the game, so we flush and start a new one.
                 if (search_pv.empty())
                 {
+                    flush_psv(VALUE_DRAW);
                     break;
                 }
 
@@ -744,10 +722,6 @@ namespace Stockfish::Tools
                 is >> loop_max;
             else if (token == "output_file_name")
                 is >> params.output_file_name;
-            else if (token == "eval_limit")
-                is >> params.eval_limit;
-            else if (token == "eval_diff_limit")
-                is >> params.eval_diff_limit;
             else if (token == "king_safety_limit")
                 is >> params.king_safety_limit;
             else if (token == "material_limit")
@@ -849,8 +823,6 @@ namespace Stockfish::Tools
             << "  - puzzle_depth           = " << params.puzzle_depth << endl
             << "  - nodes                  = " << params.nodes << endl
             << "  - count                  = " << loop_max << endl
-            << "  - eval_limit             = " << params.eval_limit << endl
-            << "  - eval_diff_limit        = " << params.eval_diff_limit << endl
             << "  - king_safety_limit      = " << params.king_safety_limit << endl
             << "  - material_limit         = " << params.material_limit << endl
             << "  - mate_ply               = " << params.mate_ply << endl
