@@ -120,7 +120,7 @@ namespace Stockfish::Tools
         // It must be 2**N because it will be used as the mask to calculate hash_index.
         static_assert((GENSFEN_HASH_SIZE& (GENSFEN_HASH_SIZE - 1)) == 0);
 
-        static constexpr uint64_t REPORT_DOT_EVERY = 5000;
+        static constexpr uint64_t REPORT_DOT_EVERY = 2;
 
         PuzzleGenerator(
             const Params& prm
@@ -710,8 +710,8 @@ namespace Stockfish::Tools
     // Command to generate puzzles
     void generate_puzzles(istringstream& is)
     {
-        // Number of generated game records default = 8 billion phases (Ponanza specification)
-        uint64_t loop_max = 100000000UL;
+        // Number of generated puzzles
+        uint64_t loop_max = 10000;
 
         PuzzleGenerator::Params params;
 

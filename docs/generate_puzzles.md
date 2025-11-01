@@ -24,7 +24,7 @@ Currently the following options are available:
 
 `nodes` - the number of nodes to use for evaluation of each position. This number is multiplied by the number of PVs of the current search. This does NOT override the depth options. If specified then whichever of depth or nodes limit is reached first applies. Default: 0 (no node limit).
 
-`count` - the number of puzzle positions to generate. 1 entry == 1 position. Default: 100000000 (100M).
+`count` - the number of puzzle positions to generate. 1 entry == 1 position. Default: 10000.
 
 `output_file_name` - the name of the file to output to. If the extension is not present or doesn't match the selected data format the right extension will be appended. Default: puzzles
 
