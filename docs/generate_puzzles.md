@@ -4,11 +4,13 @@
 
 As all commands in stockfish `generate_puzzles` can be invoked either from command line (as `stockfish.exe generate_puzzles ...`, but this is not recommended because it's not possible to specify UCI options before `generate_puzzles` executes) or in the interactive prompt.
 
-It is recommended to set the `PruneAtShallowDepth` UCI option to `false` as it will increase the quality of fixed depth searches.
-
 It is recommended to keep the `EnableTranspositionTable` UCI option at the default `true` value as it will make the generation process faster without noticeably harming the uniformity of the data.
 
 `generate_puzzles` takes named parameters in the form of `generate_puzzles param_1_name param_1_value param_2_name param_2_value ...`.
+
+A very minimal example is `generate_puzzles count 100 output_file_name test.epd`.
+
+The reported puzzles only fulfill a very basic set of requirements. It is highly recommended to further validate and filter them using [ianfab/chess-variant-puzzler](https://github.com/ianfab/chess-variant-puzzler).
 
 Currently the following options are available:
 
