@@ -5,6 +5,7 @@
 
 #include "syzygy/tbprobe.h"
 
+#include <chrono>
 #include <cstring>
 #include <fstream>
 #include <limits>
@@ -26,6 +27,8 @@ namespace Stockfish::Tools {
         {
             sfen_buffers_pool.reserve((size_t)thread_num * 10);
             sfen_buffers.resize(thread_num);
+            periodic_flush_interval = std::chrono::minutes(1);
+            last_periodic_flush = std::chrono::steady_clock::now();
 
             auto out = sync_region_cout.new_region();
             out << "INFO (sfen_writer): Creating new data file at " << filename_ << std::endl;
@@ -119,6 +122,18 @@ namespace Stockfish::Tools {
                 {
                     std::unique_lock<std::mutex> lk(mutex);
 
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now - last_periodic_flush >= periodic_flush_interval)
+                    {
+                        for (auto& buf : sfen_buffers)
+                        {
+                            if (buf && buf->size())
+                                sfen_buffers_pool.emplace_back(std::move(buf));
+                        }
+
+                        last_periodic_flush = now;
+                    }
+
                     // Atomically swap take the filled buffers and
                     // create a new buffer pool for threads to fill.
                     buffers = std::move(sfen_buffers_pool);
@@ -187,6 +202,9 @@ namespace Stockfish::Tools {
         // transfer it to the latter.
         std::vector<std::unique_ptr<PSVector>> sfen_buffers;
         std::vector<std::unique_ptr<PSVector>> sfen_buffers_pool;
+
+        std::chrono::steady_clock::duration periodic_flush_interval;
+        std::chrono::steady_clock::time_point last_periodic_flush;
 
         // Mutex required to access sfen_buffers_pool
         std::mutex mutex;

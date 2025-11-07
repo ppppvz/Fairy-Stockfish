@@ -125,7 +125,7 @@ namespace Stockfish::Tools
             const Params& prm
         ) :
             params(prm),
-            sfen_writer(prm.output_file_name, prm.num_threads, prm.save_every, prm.sfen_format, 10)
+            sfen_writer(prm.output_file_name, prm.num_threads, prm.save_every, prm.sfen_format, 100)
         {
             hash.resize(GENSFEN_HASH_SIZE);
             prngs.reserve(prm.num_threads);
