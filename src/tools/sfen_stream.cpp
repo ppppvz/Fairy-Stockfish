@@ -19,11 +19,11 @@ namespace Stockfish::Tools {
 
         for (const auto& psv : sfens)
         {
-            // Unpack the sfen to get the position
             set_from_packed_sfen(pos, psv.sfen, &si, th);
 
-            // Write the FEN string followed by a newline
-            m_stream << pos.fen() << '\n';
+            std::string fen_line = pos.fen();
+            fen_line.push_back('\n');
+            m_stream << fen_line;
         }
     }
 
