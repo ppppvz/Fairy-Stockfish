@@ -49,6 +49,9 @@ namespace Stockfish::Tools
             // Puzzle-specific depth for mate detection
             int puzzle_depth = 7;
 
+            // Second validation depth (0 = disabled)
+            int puzzle_depth2 = 0;
+
             // Number of the nodes to be searched.
             // 0 represents no limits.
             uint64_t nodes = 0;
@@ -203,6 +206,8 @@ namespace Stockfish::Tools
         void report(uint64_t done, uint64_t draws, uint64_t new_done);
 
         void maybe_report(uint64_t done, uint64_t draws);
+
+        bool validate_puzzle_at_depth(Position& pos, int depth);
     };
 
     void PuzzleGenerator::set_gensfen_search_limits()
@@ -346,75 +351,12 @@ namespace Stockfish::Tools
                     // If puzzle_depth is set, we will check if the position is a mate or not.
                     else if (params.puzzle_depth > 0)
                     {
-                        auto [search_value2, search_pv2] = Search::search(pos, params.puzzle_depth, params.second_pv_limit < VALUE_MATE ? 2 : 1, 0);
-                        // Filter non-mate and short mate positions
-                        if (search_value2 < VALUE_MATE_IN_MAX_PLY || search_value2 > mate_in(params.mate_ply))
-                            keep = false;
-                        // Filter positions where the second line's eval is above the limit (if second_pv_limit < VALUE_MATE)
-                        else if (params.second_pv_limit < VALUE_MATE)
+                        keep = validate_puzzle_at_depth(pos, params.puzzle_depth);
+
+                        // Second depth validation (if enabled and first validation passed)
+                        if (keep && params.puzzle_depth2 > 0)
                         {
-                            auto& rm = pos.this_thread()->rootMoves;
-                            if (rm.size() >= 2)
-                            {
-                                Value second_value = rm[1].score;
-                                if (second_value >= params.second_pv_limit)
-                                    keep = false;
-                            }
-                        }
-
-                        const bool check_material_limits = params.final_material_limit < 64000
-                            || params.material_diff_limit < 64000;
-                        const bool check_recursive_uniqueness = params.second_pv_nonroot_limit < VALUE_MATE;
-
-                        if (keep
-                            && !search_pv2.empty()
-                            && (check_material_limits || check_recursive_uniqueness))
-                        {
-                            const Color initial_side = pos.side_to_move();
-                            const auto material_balance = [initial_side](const Position& position) {
-                                return mg_value(initial_side == WHITE ? position.psq_score()
-                                                                      : -position.psq_score());
-                            };
-
-                            const Value initial_material = material_balance(pos);
-
-                            std::vector<StateInfo, AlignedAllocator<StateInfo>> validation_states(search_pv2.size());
-                            size_t executed = 0;
-
-                            for (Move pv_move : search_pv2)
-                            {
-                                if (!is_ok(pv_move))
-                                    break;
-
-                                pos.do_move(pv_move, validation_states[executed]);
-                                ++executed;
-                            }
-
-                            Value final_material = material_balance(pos);
-                            Value material_delta = final_material - initial_material;
-
-                            if (   final_material > params.final_material_limit
-                                || material_delta > params.material_diff_limit)
-                                keep = false;
-
-                            while (executed > 0)
-                            {
-                                if (keep
-                                    && check_recursive_uniqueness
-                                    && pos.side_to_move() == initial_side)
-                                {
-                                    int depth_remaining = std::max(1, params.puzzle_depth - static_cast<int>(executed) / 2);
-                                    auto [nested_value, nested_pv] = Search::search(pos, depth_remaining, 2, 0);
-                                    auto& nested_rm = pos.this_thread()->rootMoves;
-                                    if (nested_rm.size() >= 2)
-                                    {
-                                        Value second_value = nested_rm[1].score;
-                                        if (second_value >= params.second_pv_nonroot_limit)
-                                            keep = false;
-                                    }
-                                }
-                                pos.undo_move(search_pv2[--executed]);
-                            }
+                            keep = validate_puzzle_at_depth(pos, params.puzzle_depth2);
                         }
                     }
 
@@ -668,6 +610,89 @@ namespace Stockfish::Tools
         return random_move;
     }
 
+    bool PuzzleGenerator::validate_puzzle_at_depth(Position& pos, int depth)
+    {
+        auto [search_value, search_pv] = Search::search(pos, depth, params.second_pv_limit < VALUE_MATE ? 2 : 1, 0);
+
+        // Filter non-mate and short mate positions
+        if (search_value < VALUE_MATE_IN_MAX_PLY || search_value > mate_in(params.mate_ply))
+            return false;
+
+        // Filter positions where the second line's eval is above the limit (if second_pv_limit < VALUE_MATE)
+        if (params.second_pv_limit < VALUE_MATE)
+        {
+            auto& rm = pos.this_thread()->rootMoves;
+            if (rm.size() >= 2)
+            {
+                Value second_value = rm[1].score;
+                if (second_value >= params.second_pv_limit)
+                    return false;
+            }
+        }
+
+        const bool check_material_limits = params.final_material_limit < 64000
+            || params.material_diff_limit < 64000;
+        const bool check_recursive_uniqueness = params.second_pv_nonroot_limit < VALUE_MATE;
+
+        if (!search_pv.empty() && (check_material_limits || check_recursive_uniqueness))
+        {
+            const Color initial_side = pos.side_to_move();
+            const auto material_balance = [initial_side](const Position& position) {
+                return mg_value(initial_side == WHITE ? position.psq_score()
+                                                      : -position.psq_score());
+            };
+
+            const Value initial_material = material_balance(pos);
+
+            std::vector<StateInfo, AlignedAllocator<StateInfo>> validation_states(search_pv.size());
+            size_t executed = 0;
+
+            for (Move pv_move : search_pv)
+            {
+                if (!is_ok(pv_move))
+                    break;
+
+                pos.do_move(pv_move, validation_states[executed]);
+                ++executed;
+            }
+
+            Value final_material = material_balance(pos);
+            Value material_delta = final_material - initial_material;
+
+            if (final_material > params.final_material_limit
+                || material_delta > params.material_diff_limit)
+            {
+                while (executed > 0)
+                    pos.undo_move(search_pv[--executed]);
+                return false;
+            }
+
+            bool keep = true;
+            while (executed > 0)
+            {
+                if (keep
+                    && check_recursive_uniqueness
+                    && pos.side_to_move() == initial_side)
+                {
+                    int depth_remaining = std::max(1, depth - static_cast<int>(executed) / 2);
+                    auto [nested_value, nested_pv] = Search::search(pos, depth_remaining, 2, 0);
+                    auto& nested_rm = pos.this_thread()->rootMoves;
+                    if (nested_rm.size() >= 2)
+                    {
+                        Value second_value = nested_rm[1].score;
+                        if (second_value >= params.second_pv_nonroot_limit)
+                            keep = false;
+                    }
+                }
+                pos.undo_move(search_pv[--executed]);
+            }
+
+            return keep;
+        }
+
+        return true;
+    }
+
     // Write out the phases loaded in sfens to a file.
     // result: win/loss in the next phase after the final phase in sfens
     // 1 when winning. -1 when losing. Pass 0 for a draw.
@@ -786,6 +811,8 @@ namespace Stockfish::Tools
                 is >> params.search_depth_max;
             else if (token == "puzzle_depth")
                 is >> params.puzzle_depth;
+            else if (token == "puzzle_depth2")
+                is >> params.puzzle_depth2;
             else if (token == "nodes")
                 is >> params.nodes;
             else if (token == "count")
@@ -899,6 +926,7 @@ namespace Stockfish::Tools
             << "  - search_depth_min       = " << params.search_depth_min << endl
             << "  - search_depth_max       = " << params.search_depth_max << endl
             << "  - puzzle_depth           = " << params.puzzle_depth << endl
+            << "  - puzzle_depth2          = " << params.puzzle_depth2 << endl
             << "  - nodes                  = " << params.nodes << endl
             << "  - count                  = " << loop_max << endl
             << "  - king_safety_limit      = " << params.king_safety_limit << endl

@@ -24,6 +24,8 @@ Currently the following options are available:
 
 `puzzle_depth` - if set to a value greater than 0, enables mate puzzle validation. Positions will be searched to this depth to verify they contain a forced mate. Only positions with mates longer than `mate_ply` will be kept. Default: 7.
 
+`puzzle_depth2` - if set to a value greater than 0, enables a second mate puzzle validation pass after `puzzle_depth` validation succeeds. Positions must pass both validation depths to be kept. This provides an additional layer of puzzle quality filtering. Default: 0 (disabled).
+
 `nodes` - the number of nodes to use for evaluation of each position. This number is multiplied by the number of PVs of the current search. This does NOT override the depth options. If specified then whichever of depth or nodes limit is reached first applies. Default: 0 (no node limit).
 
 `count` - the number of puzzle positions to generate. 1 entry == 1 position. Default: 10000.
