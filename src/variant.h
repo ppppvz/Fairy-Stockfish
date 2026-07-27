@@ -128,6 +128,7 @@ struct Variant {
   bool perpetualCheckIllegal = false;
   bool moveRepetitionIllegal = false;
   ChasingRule chasingRule = NO_CHASING;
+  bool promotedSoldiersChaseable = true;
   Value stalemateValue = VALUE_DRAW;
   bool stalematePieceCount = false; // multiply stalemate value by sign(count(~stm) - count(stm))
   Value checkmateValue = -VALUE_MATE;

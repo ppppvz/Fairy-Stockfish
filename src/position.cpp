@@ -2982,11 +2982,17 @@ Bitboard Position::chased() const {
       if ((kingFilePieces & pieces(sideToMove, KING)) && !more_than_one(kingFilePieces & ~pieces(KING)))
           pins |= kingFilePieces & ~pieces(KING);
   }
+  // Chase targets exempt for the side to move: kings always, and soldiers unless the
+  // variant makes them chaseable once promoted. The discovered-check path below keeps
+  // its original unmasked behavior.
+  Bitboard chaseExempt = pieces(sideToMove, KING, SOLDIER);
+  if (var->promotedSoldiersChaseable)
+      chaseExempt ^= promoted_soldiers(sideToMove);
   auto addChased = [&](Square attackerSq, PieceType attackerType, Bitboard attacks) {
       if (attacks & ~b)
       {
-          // Exclude attacks on unpromoted soldiers and checks
-          attacks &= ~(pieces(sideToMove, KING, SOLDIER) ^ promoted_soldiers(sideToMove));
+          // Exclude attacks on exempt targets and checks
+          attacks &= ~chaseExempt;
           // Attacks against stronger pieces
           if (attackerType == HORSE || attackerType == CANNON)
               b |= attacks & pieces(sideToMove, ROOK);
@@ -3057,7 +3063,7 @@ Bitboard Position::chased() const {
           Square s = pop_lsb(newPins);
           PieceType pinnedPiece = type_of(piece_on(s));
           Bitboard fakeRooted =  pieces(sideToMove)
-                               & ~(pieces(sideToMove, KING, SOLDIER) ^ promoted_soldiers(sideToMove))
+                               & ~chaseExempt
                                & attacks_bb(sideToMove, pinnedPiece, s, pieces());
           while (fakeRooted)
           {
