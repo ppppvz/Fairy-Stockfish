@@ -140,11 +140,11 @@ nFoldValue = loss
 [minixiangqiaxf:minixiangqi]
 chasingRule = axf
 nMoveRule = 0
-promotedSoldiersChaseable = false
 
-[minixiangqiaxfchaseable:minixiangqi]
+[minixiangqiaxfsoldierexempt:minixiangqi]
 chasingRule = axf
 nMoveRule = 0
+promotedSoldiersChaseable = false
 """
 
 sf.load_variant_config(ini_text)
@@ -1199,11 +1199,17 @@ class TestPyffish(unittest.TestCase):
 
         # promotedSoldiersChaseable, on a chariot perpetually pursuing a lone soldier.
         # Mini Xiangqi soldiers are promoted from the start, so the flag alone decides
-        # whether this is a chase violation or a neutral repetition.
+        # whether this is a chase violation or a neutral repetition. Both side-to-move
+        # parities are pinned, since the reported value is side-to-move relative.
         MINI_SOLDIER_CHASE = "4k2/7/p6/7/1R5/7/2K4 w - - 0 1"
         MINI_SOLDIER_CHASE_MOVES = 2 * ["b3a3", "a5b5", "a3b3", "b5a5"]
-        self._check_optional_game_end("minixiangqiaxfchaseable", MINI_SOLDIER_CHASE, MINI_SOLDIER_CHASE_MOVES, True, -sf.VALUE_MATE)
-        self._check_optional_game_end("minixiangqiaxf", MINI_SOLDIER_CHASE, MINI_SOLDIER_CHASE_MOVES, True, sf.VALUE_DRAW)
+        self._check_optional_game_end("minixiangqiaxf", MINI_SOLDIER_CHASE, MINI_SOLDIER_CHASE_MOVES, True, -sf.VALUE_MATE)
+        self._check_optional_game_end("minixiangqiaxfsoldierexempt", MINI_SOLDIER_CHASE, MINI_SOLDIER_CHASE_MOVES, True, sf.VALUE_DRAW)
+        # Same chase with the chased side to move
+        MINI_SOLDIER_CHASE_2 = "4k2/7/p6/7/R6/7/2K4 b - - 1 1"
+        MINI_SOLDIER_CHASE_2_MOVES = 2 * ["a5b5", "a3b3", "b5a5", "b3a3"]
+        self._check_optional_game_end("minixiangqiaxf", MINI_SOLDIER_CHASE_2, MINI_SOLDIER_CHASE_2_MOVES, True, sf.VALUE_MATE)
+        self._check_optional_game_end("minixiangqiaxfsoldierexempt", MINI_SOLDIER_CHASE_2, MINI_SOLDIER_CHASE_2_MOVES, True, sf.VALUE_DRAW)
 
         # Corner cases
         # D106: Chariot chases cannon, but attack actually does not change (draw)

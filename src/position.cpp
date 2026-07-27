@@ -2982,9 +2982,9 @@ Bitboard Position::chased() const {
       if ((kingFilePieces & pieces(sideToMove, KING)) && !more_than_one(kingFilePieces & ~pieces(KING)))
           pins |= kingFilePieces & ~pieces(KING);
   }
-  // Pieces that can never be chase targets. Kings are always exempt. Soldiers are
-  // exempt while unpromoted, and remain exempt after promotion unless the variant
-  // makes promoted soldiers chaseable.
+  // Chase targets exempt for the side to move: kings always, and soldiers unless the
+  // variant makes them chaseable once promoted. The discovered-check path below keeps
+  // its original unmasked behavior.
   Bitboard chaseExempt = pieces(sideToMove, KING, SOLDIER);
   if (var->promotedSoldiersChaseable)
       chaseExempt ^= promoted_soldiers(sideToMove);
