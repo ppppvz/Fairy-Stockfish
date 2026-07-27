@@ -134,6 +134,17 @@ pawnTypes = ps
 
 [repetitionloss:chess]
 nFoldValue = loss
+
+# Mini Xiangqi soldiers are sideways-capable from the start, so soldierPromotionRank
+# marks them all promoted. These two differ only in promotedSoldiersChaseable.
+[minixiangqiaxf:minixiangqi]
+chasingRule = axf
+nMoveRule = 0
+promotedSoldiersChaseable = false
+
+[minixiangqiaxfchaseable:minixiangqi]
+chasingRule = axf
+nMoveRule = 0
 """
 
 sf.load_variant_config(ini_text)
@@ -1185,6 +1196,14 @@ class TestPyffish(unittest.TestCase):
         self._check_optional_game_end("xiangqi", "4ck3/9/9/9/9/2r1R1N2/6N2/9/4A4/3AK4 w - - 0 1", 2 * ['e5e4', 'c5c4', 'e4e5', 'c4c5'], True, sf.VALUE_DRAW)
         self._check_optional_game_end("xiangqi", "5k3/9/9/c8/9/P1P6/9/2C6/9/3K5 w - - 0 1", 2 * ['c3a3', 'a7c7', 'a3c3', 'c7a7'], True, sf.VALUE_DRAW)
         self._check_optional_game_end("xiangqi", "4k4/9/r1r6/9/PPPP5/9/9/9/1C7/5K3 w - - 0 1", ['b2a2'] + 2 * ['a8b8', 'a2c2', 'c8d8', 'c2b2', 'b8a8', 'b2d2', 'd8c8', 'd2a2'], True, sf.VALUE_DRAW)
+
+        # promotedSoldiersChaseable, on a chariot perpetually pursuing a lone soldier.
+        # Mini Xiangqi soldiers are promoted from the start, so the flag alone decides
+        # whether this is a chase violation or a neutral repetition.
+        MINI_SOLDIER_CHASE = "4k2/7/p6/7/1R5/7/2K4 w - - 0 1"
+        MINI_SOLDIER_CHASE_MOVES = 2 * ["b3a3", "a5b5", "a3b3", "b5a5"]
+        self._check_optional_game_end("minixiangqiaxfchaseable", MINI_SOLDIER_CHASE, MINI_SOLDIER_CHASE_MOVES, True, -sf.VALUE_MATE)
+        self._check_optional_game_end("minixiangqiaxf", MINI_SOLDIER_CHASE, MINI_SOLDIER_CHASE_MOVES, True, sf.VALUE_DRAW)
 
         # Corner cases
         # D106: Chariot chases cannon, but attack actually does not change (draw)

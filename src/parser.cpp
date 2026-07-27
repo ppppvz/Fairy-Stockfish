@@ -505,6 +505,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
     parse_attribute("chasingRule", v->chasingRule);
+    parse_attribute("promotedSoldiersChaseable", v->promotedSoldiersChaseable);
     parse_attribute("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);
     parse_attribute("checkmateValue", v->checkmateValue);
