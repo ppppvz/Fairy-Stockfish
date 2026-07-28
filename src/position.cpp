@@ -2988,7 +2988,15 @@ Bitboard Position::chased() const {
   Bitboard chaseExempt = pieces(sideToMove, KING, SOLDIER);
   if (var->promotedSoldiersChaseable)
       chaseExempt ^= promoted_soldiers(sideToMove);
+  // Chasers that are absolutely pinned against their own king. Such a piece can only
+  // move along the line through its own king, so a capture it "threatens" off that
+  // line can never be executed and is not a chase.
+  Bitboard chaserPins = blockers_for_king(~sideToMove) & pieces(~sideToMove);
   auto addChased = [&](Square attackerSq, PieceType attackerType, Bitboard attacks) {
+      // Restrict a pinned chaser to its pin line. A pinned horse keeps nothing at all,
+      // because no square a horse attacks lies on a line through its own square.
+      if (chaserPins & attackerSq)
+          attacks &= line_bb(square<KING>(~sideToMove), attackerSq);
       if (attacks & ~b)
       {
           // Exclude attacks on exempt targets and checks

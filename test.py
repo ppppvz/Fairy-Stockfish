@@ -1211,6 +1211,24 @@ class TestPyffish(unittest.TestCase):
         self._check_optional_game_end("minixiangqiaxf", MINI_SOLDIER_CHASE_2, MINI_SOLDIER_CHASE_2_MOVES, True, sf.VALUE_MATE)
         self._check_optional_game_end("minixiangqiaxfsoldierexempt", MINI_SOLDIER_CHASE_2, MINI_SOLDIER_CHASE_2_MOVES, True, sf.VALUE_DRAW)
 
+        # A chaser absolutely pinned against its own king threatens nothing off its
+        # pin line, so it does not chase. The white chariot is pinned on the d-file by
+        # the black chariot on d7 against the white king on d1, and Rxb3/Rxb4 are
+        # illegal at every ply; the repetition is therefore neutral. The control moves
+        # the white king one file over, which frees the chariot and is a real chase.
+        # Both side-to-move parities, since the reported value is side-to-move relative.
+        MINI_PINNED_CHASER = "3rk2/7/7/3R3/1c5/7/3K3 w - - 0 1"
+        MINI_PINNED_CHASER_MOVES = 2 * ["d4d3", "b3b4", "d3d4", "b4b3"]
+        self._check_optional_game_end("minixiangqiaxf", MINI_PINNED_CHASER, MINI_PINNED_CHASER_MOVES, True, sf.VALUE_DRAW)
+        MINI_PINNED_CHASER_2 = "3rk2/7/7/7/1c1R3/7/3K3 b - - 1 1"
+        MINI_PINNED_CHASER_2_MOVES = 2 * ["b3b4", "d3d4", "b4b3", "d4d3"]
+        self._check_optional_game_end("minixiangqiaxf", MINI_PINNED_CHASER_2, MINI_PINNED_CHASER_2_MOVES, True, sf.VALUE_DRAW)
+        # Control: the same wheel with the chariot unpinned is a chase violation
+        MINI_FREE_CHASER = "3rk2/7/7/3R3/1c5/7/2K4 w - - 0 1"
+        self._check_optional_game_end("minixiangqiaxf", MINI_FREE_CHASER, MINI_PINNED_CHASER_MOVES, True, -sf.VALUE_MATE)
+        MINI_FREE_CHASER_2 = "3rk2/7/7/7/1c1R3/7/2K4 b - - 1 1"
+        self._check_optional_game_end("minixiangqiaxf", MINI_FREE_CHASER_2, MINI_PINNED_CHASER_2_MOVES, True, sf.VALUE_MATE)
+
         # Corner cases
         # D106: Chariot chases cannon, but attack actually does not change (draw)
         self._check_optional_game_end("xiangqi", "3k2b2/4P4/4b4/9/8p/6Bc1/6P1P/3AB4/4pp3/1p1K3R1[] w - - 0 1", 2 * ["h1h2", "h5h4", "h2h1", "h4h5"], True, sf.VALUE_DRAW)
