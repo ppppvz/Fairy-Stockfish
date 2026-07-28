@@ -1229,6 +1229,31 @@ class TestPyffish(unittest.TestCase):
         MINI_FREE_CHASER_2 = "3rk2/7/7/7/1c1R3/7/2K4 b - - 1 1"
         self._check_optional_game_end("minixiangqiaxf", MINI_FREE_CHASER_2, MINI_PINNED_CHASER_2_MOVES, True, sf.VALUE_MATE)
 
+        # A flying-general pin needs the blocking piece to be the only one between the
+        # kings, counting pieces of both colours. Both kings stand on the c-file and
+        # the black chariot on c4/c5 is the only black piece between them, but the
+        # white soldier on c2 blocks the file as well, so the chariot is free and its
+        # mutual attack cancels White's. Both side-to-move parities.
+        MINI_BLOCKED_FILE = "2k4/7/R6/2r4/7/2P4/2K4 w - - 0 1"
+        MINI_BLOCKED_FILE_MOVES = 2 * ["a5a4", "c4c5", "a4a5", "c5c4"]
+        self._check_optional_game_end("minixiangqiaxf", MINI_BLOCKED_FILE, MINI_BLOCKED_FILE_MOVES, True, sf.VALUE_DRAW)
+        MINI_BLOCKED_FILE_2 = "2k4/7/7/R1r4/7/2P4/2K4 b - - 1 1"
+        MINI_BLOCKED_FILE_2_MOVES = 2 * ["c4c5", "a4a5", "c5c4", "a5a4"]
+        self._check_optional_game_end("minixiangqiaxf", MINI_BLOCKED_FILE_2, MINI_BLOCKED_FILE_2_MOVES, True, sf.VALUE_DRAW)
+        # Control: the blocker's colour is the only difference, and a blocker of the
+        # chased side was always counted, so this wheel is a draw either way.
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/R6/2r4/7/2n4/2K4 w - - 0 1", MINI_BLOCKED_FILE_MOVES, True, sf.VALUE_DRAW)
+        # The same rule through the root test rather than the mutual-attack test: a
+        # flying-general-pinned horse is no defender, so the chariot's pursuit of the
+        # cannon it guards is a chase. Interposing a white soldier between the kings
+        # unpins the horse and the defence stands, so the repetition is neutral.
+        MINI_FG_ROOT_MOVES = 2 * ["f2f4", "e4e2", "f4f2", "e2e4"]
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4c2/2n4/5R1/2K4 w - - 0 1", MINI_FG_ROOT_MOVES, True, -sf.VALUE_MATE)
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4c2/2n4/2P2R1/2K4 w - - 0 1", MINI_FG_ROOT_MOVES, True, sf.VALUE_DRAW)
+        MINI_FG_ROOT_2_MOVES = 2 * ["e4e2", "f4f2", "e2e4", "f2f4"]
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4cR1/2n4/7/2K4 b - - 1 1", MINI_FG_ROOT_2_MOVES, True, sf.VALUE_MATE)
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4cR1/2n4/2P4/2K4 b - - 1 1", MINI_FG_ROOT_2_MOVES, True, sf.VALUE_DRAW)
+
         # Corner cases
         # D106: Chariot chases cannon, but attack actually does not change (draw)
         self._check_optional_game_end("xiangqi", "3k2b2/4P4/4b4/9/8p/6Bc1/6P1P/3AB4/4pp3/1p1K3R1[] w - - 0 1", 2 * ["h1h2", "h5h4", "h2h1", "h4h5"], True, sf.VALUE_DRAW)

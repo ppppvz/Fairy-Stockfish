@@ -2976,11 +2976,22 @@ Bitboard Position::chased() const {
       return b;
 
   Bitboard pins = blockers_for_king(sideToMove);
-  if (var->flyingGeneral)
+  if (var->flyingGeneral && count<KING>(sideToMove) && count<KING>(~sideToMove))
   {
-      Bitboard kingFilePieces = file_bb(file_of(square<KING>(~sideToMove))) & pieces(sideToMove);
-      if ((kingFilePieces & pieces(sideToMove, KING)) && !more_than_one(kingFilePieces & ~pieces(KING)))
-          pins |= kingFilePieces & ~pieces(KING);
+      // A flying-general pin exists only when the two kings share a file and exactly
+      // one piece stands between them. The occupancy has to be counted over pieces of
+      // both colours and over the segment between the kings only: counting just the
+      // victim's own pieces hides a chaser standing between the kings, and counting
+      // the whole file catches pieces that are not between them at all. Either way a
+      // demonstrably free piece would be treated as pinned.
+      Square ksq = square<KING>(sideToMove);
+      Square oksq = square<KING>(~sideToMove);
+      if (file_of(ksq) == file_of(oksq))
+      {
+          Bitboard kingFileBlockers = between_bb(ksq, oksq) & ~square_bb(oksq) & pieces();
+          if (!more_than_one(kingFileBlockers))
+              pins |= kingFileBlockers & pieces(sideToMove);
+      }
   }
   // Chase targets exempt for the side to move: kings always, and soldiers unless the
   // variant makes them chaseable once promoted. The discovered-check path below keeps
