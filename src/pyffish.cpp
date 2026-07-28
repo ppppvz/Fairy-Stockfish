@@ -354,6 +354,26 @@ extern "C" PyObject* pyffish_isOptionalGameEnd(PyObject* self, PyObject *args) {
 }
 
 // INPUT variant, fen, move list
+// Read-only companion of is_optional_game_end: reports which rule produced the answer,
+// which the returned value alone cannot distinguish for a drawn repetition.
+extern "C" PyObject* pyffish_optionalGameEndRule(PyObject* self, PyObject *args) {
+    PyObject *moveList;
+    Position pos;
+    const char *fen, *variant;
+    Value result;
+    OptionalGameEndRule endRule = OPTIONAL_END_NONE;
+    int chess960 = false, countStarted = 0;
+    if (!PyArg_ParseTuple(args, "ssO!|pi", &variant, &fen, &PyList_Type, &moveList, &chess960, &countStarted)) {
+        return NULL;
+    }
+
+    StateListPtr states(new std::deque<StateInfo>(1));
+    buildPosition(pos, states, variant, fen, moveList, chess960);
+    pos.is_optional_game_end(result, 0, countStarted, &endRule);
+    return Py_BuildValue("i", int(endRule));
+}
+
+// INPUT variant, fen, move list
 extern "C" PyObject* pyffish_hasInsufficientMaterial(PyObject* self, PyObject *args) {
     PyObject *moveList;
     Position pos;
@@ -419,6 +439,7 @@ static PyMethodDef PyFFishMethods[] = {
     {"game_result", (PyCFunction)pyffish_gameResult, METH_VARARGS, "Get result from given FEN, considering variant end, checkmate, and stalemate."},
     {"is_immediate_game_end", (PyCFunction)pyffish_isImmediateGameEnd, METH_VARARGS, "Get result from given FEN if variant rules ends the game."},
     {"is_optional_game_end", (PyCFunction)pyffish_isOptionalGameEnd, METH_VARARGS, "Get result from given FEN it rules enable game end by player."},
+    {"optional_game_end_rule", (PyCFunction)pyffish_optionalGameEndRule, METH_VARARGS, "Get which rule produced the optional game end, or OPTIONAL_END_NONE."},
     {"has_insufficient_material", (PyCFunction)pyffish_hasInsufficientMaterial, METH_VARARGS, "Checks for insufficient material."},
     {"validate_fen", (PyCFunction)pyffish_validateFen, METH_VARARGS, "Validate an input FEN."},
     {"get_fog_fen", (PyCFunction)pyffish_getFogFEN, METH_VARARGS, "Get Fog of War FEN from given FEN."},
@@ -459,6 +480,16 @@ PyMODINIT_FUNC PyInit_pyffish() {
     PyModule_AddObject(module, "NOTATION_XIANGQI_WXF", PyLong_FromLong(NOTATION_XIANGQI_WXF));
     PyModule_AddObject(module, "NOTATION_THAI_SAN", PyLong_FromLong(NOTATION_THAI_SAN));
     PyModule_AddObject(module, "NOTATION_THAI_LAN", PyLong_FromLong(NOTATION_THAI_LAN));
+
+    // optional game end rules
+    PyModule_AddObject(module, "OPTIONAL_END_NONE", PyLong_FromLong(OPTIONAL_END_NONE));
+    PyModule_AddObject(module, "OPTIONAL_END_N_MOVE_RULE", PyLong_FromLong(OPTIONAL_END_N_MOVE_RULE));
+    PyModule_AddObject(module, "OPTIONAL_END_MOVE_REPETITION", PyLong_FromLong(OPTIONAL_END_MOVE_REPETITION));
+    PyModule_AddObject(module, "OPTIONAL_END_PERPETUAL_CHECK", PyLong_FromLong(OPTIONAL_END_PERPETUAL_CHECK));
+    PyModule_AddObject(module, "OPTIONAL_END_PERPETUAL_CHASE", PyLong_FromLong(OPTIONAL_END_PERPETUAL_CHASE));
+    PyModule_AddObject(module, "OPTIONAL_END_N_FOLD", PyLong_FromLong(OPTIONAL_END_N_FOLD));
+    PyModule_AddObject(module, "OPTIONAL_END_COUNTING_RULE", PyLong_FromLong(OPTIONAL_END_COUNTING_RULE));
+    PyModule_AddObject(module, "OPTIONAL_END_SITTUYIN_STALEMATE", PyLong_FromLong(OPTIONAL_END_SITTUYIN_STALEMATE));
 
     // validation
     PyModule_AddObject(module, "FEN_OK", PyLong_FromLong(FEN::FEN_OK));

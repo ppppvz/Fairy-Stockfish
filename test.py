@@ -145,6 +145,9 @@ nMoveRule = 0
 chasingRule = axf
 nMoveRule = 0
 promotedSoldiersChaseable = false
+
+[xiangqisoldierexempt:xiangqi]
+promotedSoldiersChaseable = false
 """
 
 sf.load_variant_config(ini_text)
@@ -1159,6 +1162,17 @@ class TestPyffish(unittest.TestCase):
             if game_result is not None:
                 self.assertEqual(result[1], game_result)
 
+    def _check_optional_game_end_rule(self, variant, fen, moves, rule, game_result=None):
+        with self.subTest(variant=variant, fen=fen, rule=rule):
+            reported = sf.optional_game_end_rule(variant, fen, moves)
+            self.assertEqual(reported, rule)
+            game_end, result = sf.is_optional_game_end(variant, fen, moves)
+            # NONE is reported exactly when there is no optional game end, and asking
+            # for the rule must never change the adjudication itself
+            self.assertEqual(game_end, reported != sf.OPTIONAL_END_NONE)
+            if game_result is not None:
+                self.assertEqual(result, game_result)
+
     def test_is_optional_game_end(self):
         self._check_optional_game_end("capablanca", CAPA, [], False)
 
@@ -1210,6 +1224,138 @@ class TestPyffish(unittest.TestCase):
         MINI_SOLDIER_CHASE_2_MOVES = 2 * ["a5b5", "a3b3", "b5a5", "b3a3"]
         self._check_optional_game_end("minixiangqiaxf", MINI_SOLDIER_CHASE_2, MINI_SOLDIER_CHASE_2_MOVES, True, sf.VALUE_MATE)
         self._check_optional_game_end("minixiangqiaxfsoldierexempt", MINI_SOLDIER_CHASE_2, MINI_SOLDIER_CHASE_2_MOVES, True, sf.VALUE_DRAW)
+
+        # A chaser absolutely pinned against its own king threatens nothing off its
+        # pin line, so it does not chase. The white chariot is pinned on the d-file by
+        # the black chariot on d7 against the white king on d1, and Rxb3/Rxb4 are
+        # illegal at every ply; the repetition is therefore neutral. The control moves
+        # the white king one file over, which frees the chariot and is a real chase.
+        # Both side-to-move parities, since the reported value is side-to-move relative.
+        MINI_PINNED_CHASER = "3rk2/7/7/3R3/1c5/7/3K3 w - - 0 1"
+        MINI_PINNED_CHASER_MOVES = 2 * ["d4d3", "b3b4", "d3d4", "b4b3"]
+        self._check_optional_game_end("minixiangqiaxf", MINI_PINNED_CHASER, MINI_PINNED_CHASER_MOVES, True, sf.VALUE_DRAW)
+        MINI_PINNED_CHASER_2 = "3rk2/7/7/7/1c1R3/7/3K3 b - - 1 1"
+        MINI_PINNED_CHASER_2_MOVES = 2 * ["b3b4", "d3d4", "b4b3", "d4d3"]
+        self._check_optional_game_end("minixiangqiaxf", MINI_PINNED_CHASER_2, MINI_PINNED_CHASER_2_MOVES, True, sf.VALUE_DRAW)
+        # Control: the same wheel with the chariot unpinned is a chase violation
+        MINI_FREE_CHASER = "3rk2/7/7/3R3/1c5/7/2K4 w - - 0 1"
+        self._check_optional_game_end("minixiangqiaxf", MINI_FREE_CHASER, MINI_PINNED_CHASER_MOVES, True, -sf.VALUE_MATE)
+        MINI_FREE_CHASER_2 = "3rk2/7/7/7/1c1R3/7/2K4 b - - 1 1"
+        self._check_optional_game_end("minixiangqiaxf", MINI_FREE_CHASER_2, MINI_PINNED_CHASER_2_MOVES, True, sf.VALUE_MATE)
+
+        # A flying-general pin needs the blocking piece to be the only one between the
+        # kings, counting pieces of both colours. Both kings stand on the c-file and
+        # the black chariot on c4/c5 is the only black piece between them, but the
+        # white soldier on c2 blocks the file as well, so the chariot is free and its
+        # mutual attack cancels White's. Both side-to-move parities.
+        MINI_BLOCKED_FILE = "2k4/7/R6/2r4/7/2P4/2K4 w - - 0 1"
+        MINI_BLOCKED_FILE_MOVES = 2 * ["a5a4", "c4c5", "a4a5", "c5c4"]
+        self._check_optional_game_end("minixiangqiaxf", MINI_BLOCKED_FILE, MINI_BLOCKED_FILE_MOVES, True, sf.VALUE_DRAW)
+        MINI_BLOCKED_FILE_2 = "2k4/7/7/R1r4/7/2P4/2K4 b - - 1 1"
+        MINI_BLOCKED_FILE_2_MOVES = 2 * ["c4c5", "a4a5", "c5c4", "a5a4"]
+        self._check_optional_game_end("minixiangqiaxf", MINI_BLOCKED_FILE_2, MINI_BLOCKED_FILE_2_MOVES, True, sf.VALUE_DRAW)
+        # Control: the blocker's colour is the only difference, and a blocker of the
+        # chased side was always counted, so this wheel is a draw either way.
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/R6/2r4/7/2n4/2K4 w - - 0 1", MINI_BLOCKED_FILE_MOVES, True, sf.VALUE_DRAW)
+        # The same rule through the root test rather than the mutual-attack test: a
+        # flying-general-pinned horse is no defender, so the chariot's pursuit of the
+        # cannon it guards is a chase. Interposing a white soldier between the kings
+        # unpins the horse and the defence stands, so the repetition is neutral.
+        MINI_FG_ROOT_MOVES = 2 * ["f2f4", "e4e2", "f4f2", "e2e4"]
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4c2/2n4/5R1/2K4 w - - 0 1", MINI_FG_ROOT_MOVES, True, -sf.VALUE_MATE)
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4c2/2n4/2P2R1/2K4 w - - 0 1", MINI_FG_ROOT_MOVES, True, sf.VALUE_DRAW)
+        MINI_FG_ROOT_2_MOVES = 2 * ["e4e2", "f4f2", "e2e4", "f2f4"]
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4cR1/2n4/7/2K4 b - - 1 1", MINI_FG_ROOT_2_MOVES, True, sf.VALUE_MATE)
+        self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4cR1/2n4/2P4/2K4 b - - 1 1", MINI_FG_ROOT_2_MOVES, True, sf.VALUE_DRAW)
+
+        # The repetition window has to span the same moves for both sides. The chase test
+        # for the side that moved last used to reach one move further back and intersect
+        # the chase set of the move that CREATED the first of the three occurrences, which
+        # is outside the window; since the accumulators intersect, a chase entered by a
+        # quiet move was silently dropped - at one parity only. These four share a wheel
+        # and differ only in the entry move or in the ply at which adjudication lands.
+        MINI_CHASE_WHEEL = ["a5b5", "a3b3", "b5a5", "b3a3"]
+        MINI_QUIET_ENTRY = "4k2/7/c6/7/7/7/R1K4 w - - 0 1"
+        self._check_optional_game_end("minixiangqiaxf", MINI_QUIET_ENTRY,
+                                      ["a1a3"] + MINI_CHASE_WHEEL * 2, True, sf.VALUE_MATE)
+        # one ply earlier there is no third occurrence yet
+        self._check_optional_game_end("minixiangqiaxf", MINI_QUIET_ENTRY,
+                                      ["a1a3"] + MINI_CHASE_WHEEL, False)
+        # the same wheel entered by a chasing move, the case that was never affected
+        self._check_optional_game_end("minixiangqiaxf", "4k2/7/c6/7/1R5/7/2K4 w - - 0 1",
+                                      ["b3a3"] + MINI_CHASE_WHEEL * 2, True, sf.VALUE_MATE)
+        # the same start and entry move judged one ply later, i.e. at the other parity
+        self._check_optional_game_end("minixiangqiaxf", MINI_QUIET_ENTRY,
+                                      ["a1a3"] + MINI_CHASE_WHEEL * 2 + ["a5b5"], True, -sf.VALUE_MATE)
+
+        # The corner that makes the window parity a wrong result rather than a delay: in
+        # a mutual perpetual chase the emptied accumulator belongs to whichever side made
+        # the quiet entry move, so the draw was adjudicated as a unilateral loss and which
+        # of the two equally violating sides lost depended on nothing else. The same
+        # mutual chase entered by a quiet White move and by a quiet Black move in turn,
+        # each with its one-ply-later continuation as the control: all four are draws, and
+        # all four report a perpetual chase rather than a neutral repetition.
+        MINI_MUTUAL_ENTRY_W = "2k2r1/7/1c2R2/7/1Nr1nC1/7/1R1K3 w - - 0 1"
+        MINI_MUTUAL_WHEEL_W = ["e3f5", "b3c5", "f5e3", "c5b3"]
+        MINI_MUTUAL_ENTRY_B = "3k1r1/7/1cN1R2/7/2r1nC1/7/1R2K2 b - - 0 1"
+        MINI_MUTUAL_WHEEL_B = ["c5b3", "e3f5", "b3c5", "f5e3"]
+        for fen, entry, wheel in ((MINI_MUTUAL_ENTRY_W, "d1e1", MINI_MUTUAL_WHEEL_W),
+                                  (MINI_MUTUAL_ENTRY_B, "d7c7", MINI_MUTUAL_WHEEL_B)):
+            for extra in ([], wheel[:1]):
+                moves = [entry] + wheel * 2 + extra
+                self._check_optional_game_end("minixiangqiaxf", fen, moves, True, sf.VALUE_DRAW)
+                self._check_optional_game_end_rule("minixiangqiaxf", fen, moves,
+                                                   sf.OPTIONAL_END_PERPETUAL_CHASE, sf.VALUE_DRAW)
+
+        # The chase-target exemption is applied in the discovered-check classifier path
+        # as well, not only in the direct/discovered-attack and fake-root paths. No
+        # position is known in which that mask changes an outcome. These five cases
+        # provably run the path - neutralising it turns each of them into a draw - and
+        # are pinned under both settings of promotedSoldiersChaseable, so that a change
+        # in what the path records becomes visible even though none is expected.
+        DISCOVERED_PATH_CHASES = [
+            ("5k3/9/9/9/9/1N2P1C2/9/4BC3/9/cr1RK4 w - - 0 1", 2 * ['b5c3', 'b1c1', 'c3b5', 'c1b1']),
+            ("5k3/9/9/9/9/4c4/3n5/3NBA3/4A4/4K4 w - - 0 1", 2 * ['e1d1', 'e5d5', 'd1e1', 'd5e5']),
+            ("5k3/9/9/9/9/4c4/3r5/3NB4/4A4/4K4 w - - 0 1", 2 * ['e1d1', 'e5d5', 'd1e1', 'd5e5']),
+            ("5k3/9/9/9/9/9/9/9/9/3NK1cr1 w - - 0 1", 2 * ['d1c3', 'h1h3', 'c3d1', 'h3h1']),
+            ("2bakabr1/9/9/r1p1p1p2/p7R/P8/9/9/9/CC1AKA3 w - - 0 1",
+             ['a5a6', 'a7b7', 'a6b6', 'b7a7', 'b6a6', 'a7b7', 'a6b6', 'b7a7', 'b6a6']),
+        ]
+        for fen, moves in DISCOVERED_PATH_CHASES:
+            self._check_optional_game_end("xiangqi", fen, moves, True, sf.VALUE_MATE)
+            self._check_optional_game_end("xiangqisoldierexempt", fen, moves, True, sf.VALUE_MATE)
+
+        # Which rule produced the optional game end, reported alongside it. The value
+        # alone collapses a neutral repetition, a mutual perpetual check and a mutual
+        # perpetual chase onto the same draw score, so it cannot name the outcome. The
+        # report is read-only: every value asserted here is the one the engine already
+        # returned before the accessor existed.
+        # The three ways to arrive at a draw score, told apart
+        MINI_MUTUAL_CHASE = "2k2r1/7/1cN1R2/7/2r1nC1/7/1R2K2 w - - 0 1"
+        MINI_MUTUAL_CHASE_MOVES = 2 * ["c5b3", "e3f5", "b3c5", "f5e3"]
+        self._check_optional_game_end_rule("minixiangqiaxf", MINI_MUTUAL_CHASE, MINI_MUTUAL_CHASE_MOVES,
+                                           sf.OPTIONAL_END_PERPETUAL_CHASE, sf.VALUE_DRAW)
+        self._check_optional_game_end_rule("xiangqi", "9/4c4/3k5/3r5/9/9/4C4/9/4K4/3R5 w - - 0 1",
+                                           2 * ['e4d4', 'd7e7', 'd4e4', 'e7d7'],
+                                           sf.OPTIONAL_END_PERPETUAL_CHECK, sf.VALUE_DRAW)
+        MINI_NEUTRAL_REPETITION = "4k2/7/7/7/7/7/2K4 w - - 0 1"
+        MINI_NEUTRAL_REPETITION_MOVES = 2 * ['c1c2', 'e7e6', 'c2c1', 'e6e7']
+        self._check_optional_game_end_rule("minixiangqiaxf", MINI_NEUTRAL_REPETITION, MINI_NEUTRAL_REPETITION_MOVES,
+                                           sf.OPTIONAL_END_N_FOLD, sf.VALUE_DRAW)
+        # Unilateral violations, and the other branches of the same function
+        self._check_optional_game_end_rule("minixiangqiaxf", MINI_SOLDIER_CHASE, MINI_SOLDIER_CHASE_MOVES,
+                                           sf.OPTIONAL_END_PERPETUAL_CHASE, -sf.VALUE_MATE)
+        self._check_optional_game_end_rule("xiangqi", "9/3kc4/3a5/3P5/9/4p4/9/4K4/9/3C5 w - - 0 1",
+                                           2 * ['d7e7', 'e5d5', 'e7d7', 'd5e5'],
+                                           sf.OPTIONAL_END_PERPETUAL_CHECK, sf.VALUE_MATE)
+        self._check_optional_game_end_rule("minixiangqiaxf", MINI_NEUTRAL_REPETITION, ['c1c2', 'e7e6'],
+                                           sf.OPTIONAL_END_NONE)
+        self._check_optional_game_end_rule("chess", CHESS, 25 * ["b1c3", "b8c6", "c3b1", "c6b8"],
+                                           sf.OPTIONAL_END_N_MOVE_RULE, sf.VALUE_DRAW)
+        self._check_optional_game_end_rule("chess", CHESS, 2 * ["b1c3", "b8c6", "c3b1", "c6b8"],
+                                           sf.OPTIONAL_END_N_FOLD, sf.VALUE_DRAW)
+        self._check_optional_game_end_rule("sittuyin", "1k4PK/3r4/8/8/8/8/8/8[] w - - 0 1", [],
+                                           sf.OPTIONAL_END_SITTUYIN_STALEMATE, sf.VALUE_DRAW)
 
         # Corner cases
         # D106: Chariot chases cannon, but attack actually does not change (draw)
