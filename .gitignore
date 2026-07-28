@@ -12,6 +12,10 @@ src/.depend
 src/stockfish*
 src/-lstdc++.res
 
+# Static library (the `lib` target). Needed because the `!/src/*.*` rule above
+# would otherwise track anything in src/ that has an extension.
+src/*.a
+
 # Neural network for the NNUE evaluation
 **/*.nnue
 

@@ -26,6 +26,13 @@ else
 EXE = stockfish
 endif
 
+### Static library name. Every toolchain this Makefile supports (gcc, clang,
+### mingw, icc, ndk) uses the GNU "lib<name>.a" convention for static archives,
+### including the Windows cross build, so the name needs no per-platform branch.
+### Should a toolchain that spells it differently ever be added, give it a branch
+### here next to EXE rather than in the archive rule below.
+LIB = libfairystockfish.a
+
 ### Installation dir definitions
 PREFIX = /usr/local
 BINDIR = $(PREFIX)/bin
@@ -46,6 +53,14 @@ SRCS = benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp main.cpp 
 	nnue/features/half_ka_v2_variants.cpp
 
 OBJS = $(notdir $(SRCS:.cpp=.o))
+
+### Objects that go into the static library: everything the executable links
+### except main.o, whose only content is main() (see main.cpp). A consumer that
+### links the archive brings its own entry point, and -Wl,--whole-archive or
+### Apple's -all_load / -force_load would drag a second main() into the link.
+### The pyffish and ffish.js bindings are not in SRCS at all (they are built by
+### setup.py and Makefile_js respectively), so they are excluded by construction.
+LIBOBJS = $(filter-out main.o,$(OBJS))
 
 VPATH = syzygy:nnue:nnue/features
 
@@ -697,6 +712,43 @@ ifeq ($(OS), Android)
 	LDFLAGS += -fPIE -pie
 endif
 
+### 3.10 Archiver for the static library target
+### The archive holds the same objects the executable links, so the archiver has
+### to understand them. Section 3.8 turns on -flto by default, and an LTO object
+### carries IR rather than plain machine code: a plain binutils ar then writes an
+### archive index with no symbols in it, and the consumer's link fails with
+### undefined references. Each toolchain ships a plugin-aware wrapper for this,
+### so pick one per compiler rather than relying on make's built-in AR = ar.
+### AR set on the command line or in the environment always wins.
+
+### Darwin is the exception: clang there wraps the IR in a Mach-O object, which
+### cctools ar indexes correctly, and the Xcode toolchain ships no llvm-ar.
+ifeq ($(KERNEL),Darwin)
+	clang_ar = $(XCRUN) ar
+else
+	clang_ar = llvm-ar
+endif
+
+ifeq ($(origin AR),default)
+	ifeq ($(COMP),mingw)
+		### Mirrors the cross-compiler selection in section 3.1.
+		ifeq ($(KERNEL),Linux)
+			ifeq ($(bits),64)
+				AR = x86_64-w64-mingw32-gcc-ar
+			else
+				AR = i686-w64-mingw32-gcc-ar
+			endif
+		else
+			AR = gcc-ar
+		endif
+	else ifeq ($(comp),clang)
+		### Covers COMP=ndk too, which sets comp=clang.
+		AR = $(clang_ar)
+	else ifeq ($(comp),gcc)
+		AR = $(if $(gccisclang),$(clang_ar),gcc-ar)
+	endif
+endif
+
 ### ==========================================================================
 ### Section 4. Public Targets
 ### ==========================================================================
@@ -712,6 +764,8 @@ help:
 	@echo ""
 	@echo "help                    > Display architecture details"
 	@echo "build                   > Standard build"
+	@echo "lib                     > Build $(LIB), a static library of the engine"
+	@echo "                          without main(), for embedding in another program"
 	@echo "net                     > Download the default nnue net"
 	@echo "profile-build           > Faster build (with profile-guided optimization)"
 	@echo "strip                   > Strip executable"
@@ -786,12 +840,18 @@ else
 endif
 
 
-.PHONY: help build profile-build strip install clean net objclean profileclean \
+.PHONY: help build lib profile-build strip install clean net objclean profileclean \
         config-sanity icc-profile-use icc-profile-make gcc-profile-use gcc-profile-make \
         clang-profile-use clang-profile-make
 
 build: $(load_net) config-sanity
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) all
+
+# Static library for embedding the engine in another program. Note that LDFLAGS
+# does not travel inside an archive: the consumer's link must still supply the
+# platform libraries this configuration needs (see config-sanity for the list).
+lib: $(load_net) config-sanity
+	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) $(LIB) .depend
 
 profile-build: $(load_net) config-sanity objclean profileclean
 	@echo ""
@@ -856,7 +916,7 @@ net:
 
 # clean binaries and objects
 objclean:
-	@rm -f $(EXE) *.o ./syzygy/*.o ./nnue/*.o ./nnue/features/*.o
+	@rm -f $(EXE) $(LIB) *.o ./syzygy/*.o ./nnue/*.o ./nnue/features/*.o
 
 # clean auxiliary profiling files
 profileclean:
@@ -938,6 +998,12 @@ config-sanity: $(load_net)
 
 $(EXE): $(OBJS)
 	+$(CXX) -o $@ $(OBJS) $(LDFLAGS)
+
+# Rebuilt from scratch every time: ar replaces members but never removes ones
+# that are no longer listed, so an incremental update would keep stale objects.
+$(LIB): $(LIBOBJS)
+	@rm -f $@
+	$(AR) rcs $@ $(LIBOBJS)
 
 clang-profile-make:
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) \
