@@ -2617,8 +2617,14 @@ bool Position::see_ge(Move m, Value threshold) const {
 
 /// Position::is_optional_game_end() tests whether the position may end the game by
 /// 50-move rule, by repetition, or a variant rule that allows a player to claim a game result.
+/// The optional 'rule' out-parameter reports which branch produced the answer. It is
+/// read-only information for the caller and never enters the adjudication itself; the
+/// returned value alone cannot tell a neutral repetition from a mutual perpetual chase.
 
-bool Position::is_optional_game_end(Value& result, int ply, int countStarted) const {
+bool Position::is_optional_game_end(Value& result, int ply, int countStarted, OptionalGameEndRule* rule) const {
+
+  if (rule)
+      *rule = OPTIONAL_END_NONE;
 
   // n-move rule
   if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!checkers() || MoveList<LEGAL>(*this).size()))
@@ -2641,6 +2647,8 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
       if (st->rule50 - offset > (2 * n_move_rule() - 1))
       {
           result = var->materialCounting ? convert_mate_value(material_counting_result(), ply) : VALUE_DRAW;
+          if (rule)
+              *rule = OPTIONAL_END_N_MOVE_RULE;
           return true;
       }
   }
@@ -2684,6 +2692,8 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
                       if (!stp->previous->previous->capturedPiece && from_sq(stp->move) == to_sq(stp->previous->previous->move))
                       {
                           result = VALUE_MATE;
+                          if (rule)
+                              *rule = OPTIONAL_END_MOVE_REPETITION;
                           return true;
                       }
                       else
@@ -2705,6 +2715,10 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
                                               : (chaseThem || chaseUs) ? (!chaseUs ? VALUE_MATE : !chaseThem ? -VALUE_MATE : VALUE_DRAW)
                                               : var->nFoldValueAbsolute && sideToMove == BLACK ? -var->nFoldValue
                                               : var->nFoldValue, ply);
+                  if (rule)
+                      *rule =   (perpetualThem || perpetualUs) ? OPTIONAL_END_PERPETUAL_CHECK
+                              : (chaseThem || chaseUs)         ? OPTIONAL_END_PERPETUAL_CHASE
+                                                               : OPTIONAL_END_N_FOLD;
                   if (result == VALUE_DRAW && var->materialCounting)
                       result = convert_mate_value(material_counting_result(), ply);
                   return true;
@@ -2726,6 +2740,8 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
       && (!checkers() || MoveList<LEGAL>(*this).size()))
   {
       result = VALUE_DRAW;
+      if (rule)
+          *rule = OPTIONAL_END_COUNTING_RULE;
       return true;
   }
 
@@ -2745,6 +2761,8 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
       if (promotionsOnly)
       {
           result = VALUE_DRAW;
+          if (rule)
+              *rule = OPTIONAL_END_SITTUYIN_STALEMATE;
           return true;
       }
   }

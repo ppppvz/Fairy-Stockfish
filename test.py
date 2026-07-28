@@ -1162,6 +1162,17 @@ class TestPyffish(unittest.TestCase):
             if game_result is not None:
                 self.assertEqual(result[1], game_result)
 
+    def _check_optional_game_end_rule(self, variant, fen, moves, rule, game_result=None):
+        with self.subTest(variant=variant, fen=fen, rule=rule):
+            reported = sf.optional_game_end_rule(variant, fen, moves)
+            self.assertEqual(reported, rule)
+            game_end, result = sf.is_optional_game_end(variant, fen, moves)
+            # NONE is reported exactly when there is no optional game end, and asking
+            # for the rule must never change the adjudication itself
+            self.assertEqual(game_end, reported != sf.OPTIONAL_END_NONE)
+            if game_result is not None:
+                self.assertEqual(result, game_result)
+
     def test_is_optional_game_end(self):
         self._check_optional_game_end("capablanca", CAPA, [], False)
 
@@ -1274,6 +1285,38 @@ class TestPyffish(unittest.TestCase):
         for fen, moves in DISCOVERED_PATH_CHASES:
             self._check_optional_game_end("xiangqi", fen, moves, True, sf.VALUE_MATE)
             self._check_optional_game_end("xiangqisoldierexempt", fen, moves, True, sf.VALUE_MATE)
+
+        # Which rule produced the optional game end, reported alongside it. The value
+        # alone collapses a neutral repetition, a mutual perpetual check and a mutual
+        # perpetual chase onto the same draw score, so it cannot name the outcome. The
+        # report is read-only: every value asserted here is the one the engine already
+        # returned before the accessor existed.
+        # The three ways to arrive at a draw score, told apart
+        MINI_MUTUAL_CHASE = "2k2r1/7/1cN1R2/7/2r1nC1/7/1R2K2 w - - 0 1"
+        MINI_MUTUAL_CHASE_MOVES = 2 * ["c5b3", "e3f5", "b3c5", "f5e3"]
+        self._check_optional_game_end_rule("minixiangqiaxf", MINI_MUTUAL_CHASE, MINI_MUTUAL_CHASE_MOVES,
+                                           sf.OPTIONAL_END_PERPETUAL_CHASE, sf.VALUE_DRAW)
+        self._check_optional_game_end_rule("xiangqi", "9/4c4/3k5/3r5/9/9/4C4/9/4K4/3R5 w - - 0 1",
+                                           2 * ['e4d4', 'd7e7', 'd4e4', 'e7d7'],
+                                           sf.OPTIONAL_END_PERPETUAL_CHECK, sf.VALUE_DRAW)
+        MINI_NEUTRAL_REPETITION = "4k2/7/7/7/7/7/2K4 w - - 0 1"
+        MINI_NEUTRAL_REPETITION_MOVES = 2 * ['c1c2', 'e7e6', 'c2c1', 'e6e7']
+        self._check_optional_game_end_rule("minixiangqiaxf", MINI_NEUTRAL_REPETITION, MINI_NEUTRAL_REPETITION_MOVES,
+                                           sf.OPTIONAL_END_N_FOLD, sf.VALUE_DRAW)
+        # Unilateral violations, and the other branches of the same function
+        self._check_optional_game_end_rule("minixiangqiaxf", MINI_SOLDIER_CHASE, MINI_SOLDIER_CHASE_MOVES,
+                                           sf.OPTIONAL_END_PERPETUAL_CHASE, -sf.VALUE_MATE)
+        self._check_optional_game_end_rule("xiangqi", "9/3kc4/3a5/3P5/9/4p4/9/4K4/9/3C5 w - - 0 1",
+                                           2 * ['d7e7', 'e5d5', 'e7d7', 'd5e5'],
+                                           sf.OPTIONAL_END_PERPETUAL_CHECK, sf.VALUE_MATE)
+        self._check_optional_game_end_rule("minixiangqiaxf", MINI_NEUTRAL_REPETITION, ['c1c2', 'e7e6'],
+                                           sf.OPTIONAL_END_NONE)
+        self._check_optional_game_end_rule("chess", CHESS, 25 * ["b1c3", "b8c6", "c3b1", "c6b8"],
+                                           sf.OPTIONAL_END_N_MOVE_RULE, sf.VALUE_DRAW)
+        self._check_optional_game_end_rule("chess", CHESS, 2 * ["b1c3", "b8c6", "c3b1", "c6b8"],
+                                           sf.OPTIONAL_END_N_FOLD, sf.VALUE_DRAW)
+        self._check_optional_game_end_rule("sittuyin", "1k4PK/3r4/8/8/8/8/8/8[] w - - 0 1", [],
+                                           sf.OPTIONAL_END_SITTUYIN_STALEMATE, sf.VALUE_DRAW)
 
         # Corner cases
         # D106: Chariot chases cannon, but attack actually does not change (draw)
