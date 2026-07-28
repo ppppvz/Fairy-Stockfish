@@ -2700,9 +2700,18 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted, Op
                           moveRepetition = 0;
                   }
               }
-              // Chased pieces are empty when there is no previous move
-              if (i != st->pliesFromNull)
-                  chaseThem = undo_move_board(chaseThem, stp->previous->move) & stp->previous->previous->chased;
+              // The chase test has to span the same moves for both sides. chaseThem and
+              // chaseUs are both built by intersection, so a surplus term can only delete
+              // pieces: extending chaseThem here, before the repetition test, would also
+              // intersect in the chase set of the move that created the first of the three
+              // occurrences - a move outside the repetition window - and a chase entered by
+              // a quiet move would be dropped at one parity and kept at the other. Compute
+              // the extension at this point, because after stp advances the move it needs is
+              // no longer reachable on the backwards-linked chain, but commit it only where
+              // chaseUs is extended, below. When i == st->pliesFromNull the extension reads
+              // the root state, whose chased set is empty by construction; that value is
+              // never committed, because i + 1 <= end is then false.
+              Bitboard chaseThemNext = undo_move_board(chaseThem, stp->previous->move) & stp->previous->previous->chased;
               stp = stp->previous->previous;
               perpetualThem &= bool(stp->checkersBB);
 
@@ -2728,6 +2737,7 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted, Op
               {
                   perpetualUs &= bool(stp->previous->checkersBB);
                   chaseUs = undo_move_board(chaseUs, stp->move) & stp->previous->chased;
+                  chaseThem = chaseThemNext;
               }
           }
       }

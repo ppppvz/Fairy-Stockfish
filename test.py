@@ -1268,6 +1268,45 @@ class TestPyffish(unittest.TestCase):
         self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4cR1/2n4/7/2K4 b - - 1 1", MINI_FG_ROOT_2_MOVES, True, sf.VALUE_MATE)
         self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4cR1/2n4/2P4/2K4 b - - 1 1", MINI_FG_ROOT_2_MOVES, True, sf.VALUE_DRAW)
 
+        # The repetition window has to span the same moves for both sides. The chase test
+        # for the side that moved last used to reach one move further back and intersect
+        # the chase set of the move that CREATED the first of the three occurrences, which
+        # is outside the window; since the accumulators intersect, a chase entered by a
+        # quiet move was silently dropped - at one parity only. These four share a wheel
+        # and differ only in the entry move or in the ply at which adjudication lands.
+        MINI_CHASE_WHEEL = ["a5b5", "a3b3", "b5a5", "b3a3"]
+        MINI_QUIET_ENTRY = "4k2/7/c6/7/7/7/R1K4 w - - 0 1"
+        self._check_optional_game_end("minixiangqiaxf", MINI_QUIET_ENTRY,
+                                      ["a1a3"] + MINI_CHASE_WHEEL * 2, True, sf.VALUE_MATE)
+        # one ply earlier there is no third occurrence yet
+        self._check_optional_game_end("minixiangqiaxf", MINI_QUIET_ENTRY,
+                                      ["a1a3"] + MINI_CHASE_WHEEL, False)
+        # the same wheel entered by a chasing move, the case that was never affected
+        self._check_optional_game_end("minixiangqiaxf", "4k2/7/c6/7/1R5/7/2K4 w - - 0 1",
+                                      ["b3a3"] + MINI_CHASE_WHEEL * 2, True, sf.VALUE_MATE)
+        # the same start and entry move judged one ply later, i.e. at the other parity
+        self._check_optional_game_end("minixiangqiaxf", MINI_QUIET_ENTRY,
+                                      ["a1a3"] + MINI_CHASE_WHEEL * 2 + ["a5b5"], True, -sf.VALUE_MATE)
+
+        # The corner that makes the window parity a wrong result rather than a delay: in
+        # a mutual perpetual chase the emptied accumulator belongs to whichever side made
+        # the quiet entry move, so the draw was adjudicated as a unilateral loss and which
+        # of the two equally violating sides lost depended on nothing else. The same
+        # mutual chase entered by a quiet White move and by a quiet Black move in turn,
+        # each with its one-ply-later continuation as the control: all four are draws, and
+        # all four report a perpetual chase rather than a neutral repetition.
+        MINI_MUTUAL_ENTRY_W = "2k2r1/7/1c2R2/7/1Nr1nC1/7/1R1K3 w - - 0 1"
+        MINI_MUTUAL_WHEEL_W = ["e3f5", "b3c5", "f5e3", "c5b3"]
+        MINI_MUTUAL_ENTRY_B = "3k1r1/7/1cN1R2/7/2r1nC1/7/1R2K2 b - - 0 1"
+        MINI_MUTUAL_WHEEL_B = ["c5b3", "e3f5", "b3c5", "f5e3"]
+        for fen, entry, wheel in ((MINI_MUTUAL_ENTRY_W, "d1e1", MINI_MUTUAL_WHEEL_W),
+                                  (MINI_MUTUAL_ENTRY_B, "d7c7", MINI_MUTUAL_WHEEL_B)):
+            for extra in ([], wheel[:1]):
+                moves = [entry] + wheel * 2 + extra
+                self._check_optional_game_end("minixiangqiaxf", fen, moves, True, sf.VALUE_DRAW)
+                self._check_optional_game_end_rule("minixiangqiaxf", fen, moves,
+                                                   sf.OPTIONAL_END_PERPETUAL_CHASE, sf.VALUE_DRAW)
+
         # The chase-target exemption is applied in the discovered-check classifier path
         # as well, not only in the direct/discovered-attack and fake-root paths. No
         # position is known in which that mask changes an outcome. These five cases
