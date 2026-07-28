@@ -2994,8 +2994,7 @@ Bitboard Position::chased() const {
       }
   }
   // Chase targets exempt for the side to move: kings always, and soldiers unless the
-  // variant makes them chaseable once promoted. The discovered-check path below keeps
-  // its original unmasked behavior.
+  // variant makes them chaseable once promoted. Every classifier path below applies it.
   Bitboard chaseExempt = pieces(sideToMove, KING, SOLDIER);
   if (var->promotedSoldiersChaseable)
       chaseExempt ^= promoted_soldiers(sideToMove);
@@ -3097,7 +3096,7 @@ Bitboard Position::chased() const {
       {
           Square s = pop_lsb(newDiscoverers);
           PieceType discoveryPiece = type_of(piece_on(s));
-          Bitboard discoveryAttacks = attacks_from(~sideToMove, discoveryPiece, s) & pieces(sideToMove);
+          Bitboard discoveryAttacks = attacks_from(~sideToMove, discoveryPiece, s) & pieces(sideToMove) & ~chaseExempt;
           // Include all captures except where the king can pseudo-legally recapture
           b |= discoveryAttacks & ~attacks_from(sideToMove, KING, square<KING>(sideToMove));
           // Include captures where king can not legally recapture

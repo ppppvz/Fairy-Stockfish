@@ -145,6 +145,9 @@ nMoveRule = 0
 chasingRule = axf
 nMoveRule = 0
 promotedSoldiersChaseable = false
+
+[xiangqisoldierexempt:xiangqi]
+promotedSoldiersChaseable = false
 """
 
 sf.load_variant_config(ini_text)
@@ -1253,6 +1256,24 @@ class TestPyffish(unittest.TestCase):
         MINI_FG_ROOT_2_MOVES = 2 * ["e4e2", "f4f2", "e2e4", "f2f4"]
         self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4cR1/2n4/7/2K4 b - - 1 1", MINI_FG_ROOT_2_MOVES, True, sf.VALUE_MATE)
         self._check_optional_game_end("minixiangqiaxf", "2k4/7/7/4cR1/2n4/2P4/2K4 b - - 1 1", MINI_FG_ROOT_2_MOVES, True, sf.VALUE_DRAW)
+
+        # The chase-target exemption is applied in the discovered-check classifier path
+        # as well, not only in the direct/discovered-attack and fake-root paths. No
+        # position is known in which that mask changes an outcome. These five cases
+        # provably run the path - neutralising it turns each of them into a draw - and
+        # are pinned under both settings of promotedSoldiersChaseable, so that a change
+        # in what the path records becomes visible even though none is expected.
+        DISCOVERED_PATH_CHASES = [
+            ("5k3/9/9/9/9/1N2P1C2/9/4BC3/9/cr1RK4 w - - 0 1", 2 * ['b5c3', 'b1c1', 'c3b5', 'c1b1']),
+            ("5k3/9/9/9/9/4c4/3n5/3NBA3/4A4/4K4 w - - 0 1", 2 * ['e1d1', 'e5d5', 'd1e1', 'd5e5']),
+            ("5k3/9/9/9/9/4c4/3r5/3NB4/4A4/4K4 w - - 0 1", 2 * ['e1d1', 'e5d5', 'd1e1', 'd5e5']),
+            ("5k3/9/9/9/9/9/9/9/9/3NK1cr1 w - - 0 1", 2 * ['d1c3', 'h1h3', 'c3d1', 'h3h1']),
+            ("2bakabr1/9/9/r1p1p1p2/p7R/P8/9/9/9/CC1AKA3 w - - 0 1",
+             ['a5a6', 'a7b7', 'a6b6', 'b7a7', 'b6a6', 'a7b7', 'a6b6', 'b7a7', 'b6a6']),
+        ]
+        for fen, moves in DISCOVERED_PATH_CHASES:
+            self._check_optional_game_end("xiangqi", fen, moves, True, sf.VALUE_MATE)
+            self._check_optional_game_end("xiangqisoldierexempt", fen, moves, True, sf.VALUE_MATE)
 
         # Corner cases
         # D106: Chariot chases cannon, but attack actually does not change (draw)
