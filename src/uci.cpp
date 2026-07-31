@@ -412,6 +412,35 @@ void search_mcts_cmd(Position& pos, istringstream& is)
     << "#define KING_SQUARES " << v->nnueKingSquare << std::endl
     << "#define DATA_SIZE " << DATA_SIZE << std::endl;
 
+    // The trainer's data loader has to map a king square to its feature index
+    // exactly the way this engine does, and it cannot derive that from the
+    // values above: KING_SQUARES says how MANY squares the king may occupy, not
+    // WHICH ones. Its fallback assumes a Xiangqi-shaped palace on a nine-file
+    // board, which silently produces colliding -- and negative -- indices on any
+    // other board with a restricted king, Mini Xiangqi included. So emit the
+    // mapping itself, indexed by variant square, with -1 for squares the king
+    // cannot reach.
+    //
+    // This repeats the rule in Variant::conclude(). It cannot share code with
+    // it: conclude() may run before the bitboards are initialised, so it keeps
+    // no table to read back. A change to the rule there has to be made here too.
+    if (v->nnueKing)
+    {
+        const int nnueSquares = (v->maxFile + 1) * (v->maxRank + 1);
+        *varianth << "#define KING_SQUARE_MAP {";
+        int kingSquare = 0;
+        for (Square s = SQ_A1; s < nnueSquares; ++s)
+        {
+            Square bitboardSquare = Square(s + s / (v->maxFile + 1) * (FILE_MAX - v->maxFile));
+            const bool reachable =
+                   !v->mobilityRegion[WHITE][v->nnueKing] || !v->mobilityRegion[BLACK][v->nnueKing]
+                || (v->mobilityRegion[WHITE][v->nnueKing] & make_bitboard(bitboardSquare))
+                || (v->mobilityRegion[BLACK][v->nnueKing] & make_bitboard(relative_square(BLACK, bitboardSquare, v->maxRank)));
+            *varianth << (s == SQ_A1 ? "" : ", ") << (reachable ? kingSquare++ : -1);
+        }
+        *varianth << "}" << std::endl;
+    }
+
     if (out1.is_open()) {
         out1.close();
     }
