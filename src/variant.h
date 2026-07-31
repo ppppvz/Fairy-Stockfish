@@ -169,12 +169,14 @@ struct Variant {
   bool fastAttacks2 = true;
   std::string nnueAlias = "";
   PieceType nnueKing = KING;
+  int pieceIndex[PIECE_TYPE_NB];
   int nnueDimensions;
   bool nnueUsePockets;
   int pieceSquareIndex[COLOR_NB][PIECE_NB];
   int pieceHandIndex[COLOR_NB][PIECE_NB];
   int kingSquareIndex[SQUARE_NB];
   int nnueMaxPieces;
+  int nnueKingSquare;
   EndgameEval endgameEval = EG_EVAL_CHESS;
   bool shogiStylePromotions = false;
   std::vector<Direction> connectDirections;

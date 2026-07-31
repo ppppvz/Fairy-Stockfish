@@ -27,6 +27,8 @@
 #include <streambuf>
 #include <vector>
 
+#include "nnue/evaluate_nnue.h"
+
 #include "bitboard.h"
 #include "evaluate.h"
 #include "material.h"
@@ -36,7 +38,6 @@
 #include "timeman.h"
 #include "uci.h"
 #include "incbin/incbin.h"
-
 
 // Macro to embed the default efficiently updatable neural network (NNUE) file
 // data in the engine binary (using incbin.h, by Dale Weiler).
@@ -54,7 +55,6 @@
   const unsigned int         gEmbeddedNNUESize = 1;
 #endif
 
-
 using namespace std;
 
 namespace Stockfish {
@@ -63,8 +63,22 @@ const Variant* currentNnueVariant;
 
 namespace Eval {
 
-  bool useNNUE;
-  string eval_file_loaded = "None";
+  namespace NNUE {
+    string eval_file_loaded = "None";
+    UseNNUEMode useNNUE;
+
+    static UseNNUEMode nnue_mode_from_option(const UCI::Option& mode)
+    {
+      if (mode == "false")
+        return UseNNUEMode::False;
+      else if (mode == "true")
+         return UseNNUEMode::True;
+      else if (mode == "pure")
+        return UseNNUEMode::Pure;
+
+      return UseNNUEMode::False;
+    }
+  }
 
   /// NNUE::init() tries to load a NNUE network at startup time, or when the engine
   /// receives a UCI command "setoption name EvalFile value nn-[a-z0-9]{12}.nnue"
@@ -76,8 +90,8 @@ namespace Eval {
 
   void NNUE::init() {
 
-    useNNUE = Options["Use NNUE"];
-    if (!useNNUE)
+    useNNUE = nnue_mode_from_option(Options["Use NNUE"]);
+    if (useNNUE == UseNNUEMode::False)
         return;
 
     string eval_file = string(Options["EvalFile"]);
@@ -86,18 +100,18 @@ namespace Eval {
     // Support multiple variant networks separated by semicolon(Windows)/colon(Unix)
     stringstream ss(eval_file);
     string variant = string(Options["UCI_Variant"]);
-    useNNUE = false;
+    useNNUE = UseNNUEMode::False;
     while (getline(ss, eval_file, UCI::SepChar))
     {
         string basename = eval_file.substr(eval_file.find_last_of("\\/") + 1);
         string nnueAlias = variants.find(variant)->second->nnueAlias;
         if (basename.rfind(variant, 0) != string::npos || (!nnueAlias.empty() && basename.rfind(nnueAlias, 0) != string::npos))
         {
-            useNNUE = true;
+            useNNUE = UseNNUEMode::True;
             break;
         }
     }
-    if (!useNNUE)
+    if (useNNUE == UseNNUEMode::False)
         return;
 
     currentNnueVariant = variants.find(variant)->second;
@@ -142,7 +156,7 @@ namespace Eval {
 
     string eval_file = string(Options["EvalFile"]);
 
-    if (useNNUE && eval_file.find(eval_file_loaded) == string::npos)
+    if (useNNUE != UseNNUEMode::False && eval_file.find(eval_file_loaded) == string::npos)
     {
         UCI::OptionsMap defaults;
         UCI::init(defaults);
@@ -164,7 +178,7 @@ namespace Eval {
 
     if (CurrentProtocol != XBOARD)
     {
-        if (useNNUE)
+        if (useNNUE != UseNNUEMode::False)
             sync_cout << "info string NNUE evaluation using " << eval_file_loaded << " enabled" << sync_endl;
         else
             sync_cout << "info string classical evaluation enabled" << sync_endl;
@@ -326,6 +340,7 @@ namespace {
     explicit Evaluation(const Position& p) : pos(p) {}
     Evaluation& operator=(const Evaluation&) = delete;
     Value value();
+    Value king();
 
   private:
     template<Color Us> void initialize();
@@ -1563,6 +1578,44 @@ make_v:
     return v;
   }
 
+  template<Tracing T>
+  Value Evaluation<T>::king() {
+
+    assert(!pos.checkers());
+    assert(!pos.is_immediate_game_end());
+
+    // Probe the material hash table
+    me = Material::probe(pos);
+
+    // Probe the pawn hash table
+    pe = Pawns::probe(pos);
+
+    // Main evaluation begins here
+    std::memset(attackedBy, 0, sizeof(attackedBy));
+    initialize<WHITE>();
+    initialize<BLACK>();
+
+    // Pieces evaluated first (also populates attackedBy, attackedBy2).
+    // For unused piece types, we still need to set attack bitboard to zero.
+    for (PieceSet ps = pos.piece_types(); ps;)
+    {
+        PieceType pt = pop_lsb(ps);
+        if (pt != SHOGI_PAWN && pt != PAWN && pt != KING)
+            pieces<WHITE>(pt) - pieces<BLACK>(pt);
+    }
+
+    // Evaluate pieces in hand once attack tables are complete
+    if (pos.piece_drops() || pos.seirawan_gating())
+        for (PieceSet ps = pos.piece_types(); ps;)
+        {
+            PieceType pt = pop_lsb(ps);
+            hand<WHITE>(pt) - hand<BLACK>(pt);
+        }
+
+    // More complex interactions that require fully populated attack bitboards
+    return mg_value(pos.side_to_move() == BLACK ? king<WHITE>() : king<BLACK>());
+  }
+
 
   /// Fisher Random Chess: correction for cornered bishops, to fix chess960 play with NNUE
 
@@ -1607,18 +1660,27 @@ make_v:
 
 Value Eval::evaluate(const Position& pos) {
 
+  pos.this_thread()->on_eval();
+
   Value v;
 
-  if (!Eval::useNNUE || !pos.nnue_applicable())
+  if (NNUE::useNNUE == NNUE::UseNNUEMode::Pure && pos.nnue_applicable()) {
+      v = NNUE::evaluate(pos);
+
+      // Guarantee evaluation does not hit the tablebase range
+      v = std::clamp(v, VALUE_TB_LOSS_IN_MAX_PLY + 1, VALUE_TB_WIN_IN_MAX_PLY - 1);
+
+      return v;
+  }
+  else if (NNUE::useNNUE == NNUE::UseNNUEMode::False || !pos.nnue_applicable())
       v = Evaluation<NO_TRACE>(pos).value();
   else
   {
       // Scale and shift NNUE for compatibility with search and classical evaluation
       auto  adjusted_NNUE = [&]()
       {
-         int scale =   903
-                     + 32 * pos.count<PAWN>()
-                     + 32 * pos.non_pawn_material() / 1024;
+
+         int scale = 1200; // try to avoid divergence in reinforcement learning
 
          Value nnue = NNUE::evaluate(pos, true) * scale / 1024;
 
@@ -1663,6 +1725,12 @@ Value Eval::evaluate(const Position& pos) {
 
   return v;
 }
+
+
+Value Eval::eval_king(const Position& pos) {
+    return Evaluation<NO_TRACE>(pos).king();
+}
+
 
 /// trace() is like evaluate(), but instead of returning a value, it returns
 /// a string (suitable for outputting to stdout) that contains the detailed
@@ -1709,14 +1777,14 @@ std::string Eval::trace(Position& pos) {
      << "|      Total | " << Term(TOTAL)
      << "+------------+-------------+-------------+-------------+\n";
 
-  if (Eval::useNNUE && pos.nnue_applicable())
+  if (NNUE::useNNUE != NNUE::UseNNUEMode::False && pos.nnue_applicable())
       ss << '\n' << NNUE::trace(pos) << '\n';
 
   ss << std::showpoint << std::showpos << std::fixed << std::setprecision(2) << std::setw(15);
 
   v = pos.side_to_move() == WHITE ? v : -v;
   ss << "\nClassical evaluation   " << to_cp(v) << " (white side)\n";
-  if (Eval::useNNUE && pos.nnue_applicable())
+  if (NNUE::useNNUE != NNUE::UseNNUEMode::False && pos.nnue_applicable())
   {
       v = NNUE::evaluate(pos, false);
       v = pos.side_to_move() == WHITE ? v : -v;
@@ -1726,7 +1794,7 @@ std::string Eval::trace(Position& pos) {
   v = evaluate(pos);
   v = pos.side_to_move() == WHITE ? v : -v;
   ss << "Final evaluation       " << to_cp(v) << " (white side)";
-  if (Eval::useNNUE && pos.nnue_applicable())
+  if (NNUE::useNNUE != NNUE::UseNNUEMode::False && pos.nnue_applicable())
      ss << " [with scaled NNUE, hybrid, ...]";
   ss << "\n";
 

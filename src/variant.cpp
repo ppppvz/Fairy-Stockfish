@@ -2038,6 +2038,7 @@ Variant* Variant::conclude() {
         ps ^= pt;
         assert(pt != nnueKing || !ps);
 
+        pieceIndex[pt] = i;
         for (Color c : { WHITE, BLACK})
         {
             pieceSquareIndex[c][make_piece(c, pt)] = 2 * i * nnueSquares;
@@ -2053,7 +2054,7 @@ Variant* Variant::conclude() {
     // Variants might be initialized before bitboards, so do not rely on precomputed bitboards (like SquareBB).
     // Furthermore conclude() might be called on invalid configuration during validation,
     // therefore skip proper initialization in case of invalid board size.
-    int nnueKingSquare = 0;
+    nnueKingSquare = 0;
     if (nnueKing && nnueSquares <= SQUARE_NB)
         for (Square s = SQ_A1; s < nnueSquares; ++s)
         {

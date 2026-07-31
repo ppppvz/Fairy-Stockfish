@@ -98,6 +98,8 @@ public:
     return table ? &table[mul_hi64(key, clusterCount)].entry[0] : scratch.entry;
   }
 
+  static bool enable_transposition_table;
+
 private:
   friend struct TTEntry;
 

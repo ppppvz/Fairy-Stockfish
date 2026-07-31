@@ -93,6 +93,9 @@ struct MoveList {
     return std::find(begin(), end(), move) != end();
   }
 
+  // returns the i th element
+  const ExtMove at(size_t i) const { assert(0 <= i && i < size()); return begin()[i]; }
+
 private:
     ExtMove* last;
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
