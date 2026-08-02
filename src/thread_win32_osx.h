@@ -73,8 +73,8 @@ public:
 /// _beginthreadex() is the one creation path that takes a stack size, so ask it
 /// for the same 64 MiB the pthread branch asks for. STACK_SIZE_PARAM_IS_A_RESERVATION
 /// makes that a reservation of address space; without it the size would be an
-/// initial commit, and every thread would take 64 MiB of real memory before using
-/// it. Pages are committed as the stack grows into them either way.
+/// initial commit, charging 64 MiB of committed memory per thread before it is
+/// needed. Pages are committed as the stack grows into them either way.
 /// MinGW does not reach here: it is matched above and keeps pthreads.
 
 #include <process.h>
