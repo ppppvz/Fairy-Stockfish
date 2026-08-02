@@ -45,3 +45,6 @@ src/*.txt
 # IDEs
 .vscode
 .idea
+
+# macOS Finder metadata
+.DS_Store
